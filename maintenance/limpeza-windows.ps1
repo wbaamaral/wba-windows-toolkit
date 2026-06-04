@@ -1,0 +1,436 @@
+#requires -version 5.1
+<#
+.SYNOPSIS
+    Script de limpeza segura, manutenção e otimização conservadora para Windows 10 Pro.
+
+.DESCRIPTION
+    Este script executa rotinas administrativas seguras para liberar espaço em disco,
+    remover arquivos temporários, limpar logs não essenciais antigos, remover arquivos
+    de dump de memória, limpar cache do Windows Update, executar verificações de
+    integridade do sistema e aplicar ajustes opcionais de manutenção.
+
+    O foco desta versão é realizar uma limpeza eficiente sem remover componentes
+    críticos do Windows.
+
+.FUNCIONALIDADES
+    - Cria log completo em C:\ti.
+    - Solicita elevação administrativa automaticamente.
+    - Coleta espaço livre antes e depois da limpeza.
+    - Remove arquivos temporários do usuário atual.
+    - Remove arquivos temporários dos perfis locais.
+    - Remove arquivos temporários de C:\Windows\Temp.
+    - Remove minidumps em C:\Windows\Minidump.
+    - Remove C:\Windows\MEMORY.DMP, quando existir.
+    - Remove relatórios antigos do Windows Error Reporting.
+    - Remove logs antigos não essenciais.
+    - Preserva CBS.log ativo.
+    - Limpa cache de miniaturas e ícones dos usuários.
+    - Limpa cache de download do Windows Update.
+    - Executa limpeza integrada do Windows com cleanmgr.
+    - Executa SFC e DISM, salvo quando desabilitado por parâmetro.
+    - Pode desativar hibernação, liberando espaço do hiberfil.sys.
+    - Pode configurar tamanho fixo do arquivo de paginação.
+    - Pode executar CompactOS opcionalmente.
+    - Pode otimizar o volume C:.
+    - Pode reiniciar automaticamente ao final.
+
+.IMPACTOS ESPERADOS
+    - Liberação de espaço em disco.
+    - Remoção de arquivos temporários e resíduos de manutenção.
+    - Remoção de dumps antigos de falhas.
+    - Redução de cache acumulado do Windows Update.
+    - Verificação e possível reparo de arquivos do sistema.
+    - Reinicialização pode ser necessária para aplicar algumas alterações.
+
+.O QUE ESTE SCRIPT NÃO REMOVE
+    - Não remove C:\Windows\Installer.
+    - Não remove manualmente WinSxS.
+    - Não remove drivers.
+    - Não remove perfis de usuários.
+    - Não remove programas instalados.
+    - Não remove documentos dos usuários.
+    - Não executa limpeza agressiva de registro.
+    - Não altera serviços críticos permanentemente.
+
+.USO
+    Execução padrão:
+        .\limpeza-windows-final.ps1
+
+    Execução sem reiniciar:
+        .\limpeza-windows-final.ps1 -NoReboot
+
+    Execução sem SFC/DISM:
+        .\limpeza-windows-final.ps1 -NoSfc
+
+    Execução sem limpar cache do Windows Update:
+        .\limpeza-windows-final.ps1 -NoUpdateCache
+
+    Execução sem esvaziar lixeira:
+        .\limpeza-windows-final.ps1 -NoRecycleBin
+
+    Execução desativando hibernação:
+        .\limpeza-windows-final.ps1 -DisableHibernation
+
+    Execução configurando arquivo de paginação para 4 GB:
+        .\limpeza-windows-final.ps1 -SetPageFile -PageFileGB 4
+
+    Execução ativando CompactOS:
+        .\limpeza-windows-final.ps1 -EnableCompactOS
+
+    Execução completa, sem reboot:
+        .\limpeza-windows-final.ps1 -DisableHibernation -SetPageFile -PageFileGB 4 -EnableCompactOS -NoReboot
+
+    Caso a política de execução bloqueie o script, execute antes:
+        Set-ExecutionPolicy Bypass -Scope Process -Force
+
+.NOTAS
+    Recomendado executar em PowerShell como Administrador.
+    Testado conceitualmente para Windows 10 Pro com PowerShell 5.1 ou superior.
+#>
+[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+[Console]::InputEncoding  = [System.Text.Encoding]::UTF8
+$OutputEncoding           = [System.Text.Encoding]::UTF8
+
+$PSDefaultParameterValues['Out-File:Encoding'] = 'utf8'
+$PSDefaultParameterValues['Set-Content:Encoding'] = 'utf8'
+$PSDefaultParameterValues['Add-Content:Encoding'] = 'utf8'
+
+chcp 65001 | Out-Null
+param (
+    [switch]$Help,
+    [switch]$Version,
+
+    [switch]$NoReboot,
+    [switch]$NoSfc,
+    [switch]$NoUpdateCache,
+    [switch]$NoRecycleBin,
+
+    [switch]$DisableHibernation,
+    [switch]$SetPageFile,
+    [int]$PageFileGB = 4,
+
+    [switch]$EnableCompactOS,
+    [switch]$NoOptimizeVolume
+)
+
+$ScriptVersion = "v1.0-final"
+$LogDir = "C:\ti"
+$LogFile = Join-Path $LogDir "$((Get-Date).ToString('yyyy-MM-dd_HH-mm-ss'))-limpeza-windows-final.log"
+
+function Show-Help {
+    Write-Host ""
+    Write-Host "Limpeza segura e manutenção do Windows 10 Pro" -ForegroundColor Cyan
+    Write-Host ""
+    Write-Host "Uso:"
+    Write-Host "  .\limpeza-windows-final.ps1 [opções]"
+    Write-Host ""
+    Write-Host "Opções:"
+    Write-Host "  -Help                 Mostra esta ajuda"
+    Write-Host "  -Version              Mostra a versão"
+    Write-Host "  -NoReboot             Não reinicia ao final"
+    Write-Host "  -NoSfc                Não executa SFC/DISM"
+    Write-Host "  -NoUpdateCache        Não limpa cache do Windows Update"
+    Write-Host "  -NoRecycleBin         Não esvazia a lixeira"
+    Write-Host "  -DisableHibernation   Desativa hibernação"
+    Write-Host "  -SetPageFile          Configura pagefile fixo"
+    Write-Host "  -PageFileGB 4         Define tamanho do pagefile em GB"
+    Write-Host "  -EnableCompactOS      Ativa CompactOS"
+    Write-Host "  -NoOptimizeVolume     Não executa Optimize-Volume"
+    Write-Host ""
+    Write-Host "Exemplos:"
+    Write-Host "  .\limpeza-windows-final.ps1 -NoReboot"
+    Write-Host "  .\limpeza-windows-final.ps1 -NoSfc -NoReboot"
+    Write-Host "  .\limpeza-windows-final.ps1 -DisableHibernation -NoReboot"
+    Write-Host "  .\limpeza-windows-final.ps1 -SetPageFile -PageFileGB 4 -NoReboot"
+    Write-Host "  .\limpeza-windows-final.ps1 -DisableHibernation -SetPageFile -PageFileGB 4 -EnableCompactOS -NoReboot"
+    Write-Host ""
+    Write-Host "Caso necessário:"
+    Write-Host "  Set-ExecutionPolicy Bypass -Scope Process -Force"
+    Write-Host ""
+}
+
+function Test-Admin {
+    $Identity = [Security.Principal.WindowsIdentity]::GetCurrent()
+    $Principal = [Security.Principal.WindowsPrincipal]::new($Identity)
+    return $Principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+}
+
+function Write-Step {
+    param (
+        [string]$Message,
+        [int]$Percent
+    )
+
+    Write-Progress -Activity "Limpeza e manutenção segura do Windows" -Status $Message -PercentComplete $Percent
+    Write-Host ""
+    Write-Host "[$Percent%] $Message" -ForegroundColor Cyan
+}
+
+function Invoke-Safe {
+    param (
+        [string]$Description,
+        [scriptblock]$Command
+    )
+
+    try {
+        Write-Host "Executando: $Description" -ForegroundColor Green
+        & $Command
+    }
+    catch {
+        Write-Host "Falha em: $Description" -ForegroundColor Red
+        Write-Host $_.Exception.Message -ForegroundColor Red
+    }
+}
+
+function Remove-SafePath {
+    param (
+        [string]$Path,
+        [int]$OlderThanDays = 0
+    )
+
+    if (!(Test-Path $Path)) {
+        return
+    }
+
+    if ($OlderThanDays -gt 0) {
+        Get-ChildItem $Path -Force -Recurse -ErrorAction SilentlyContinue |
+            Where-Object {
+                !$_.PSIsContainer -and $_.LastWriteTime -lt (Get-Date).AddDays(-$OlderThanDays)
+            } |
+            Remove-Item -Force -ErrorAction SilentlyContinue
+    }
+    else {
+        Get-ChildItem $Path -Force -Recurse -ErrorAction SilentlyContinue |
+            Remove-Item -Force -Recurse -ErrorAction SilentlyContinue
+    }
+}
+
+function Get-DiskInfo {
+    Get-CimInstance Win32_LogicalDisk -Filter "DeviceID='C:'" |
+        Select-Object DeviceID,
+        @{Name = "TamanhoGB"; Expression = { [math]::Round($_.Size / 1GB, 2) } },
+        @{Name = "LivreGB"; Expression = { [math]::Round($_.FreeSpace / 1GB, 2) } }
+}
+
+if ($Help) {
+    Show-Help
+    exit 0
+}
+
+if ($Version) {
+    Write-Host "Versão: $ScriptVersion" -ForegroundColor Green
+    exit 0
+}
+
+if (-not (Test-Admin)) {
+    Start-Process powershell.exe -ArgumentList "-NoProfile -ExecutionPolicy Bypass -File `"$PSCommandPath`" $args" -Verb RunAs
+    exit
+}
+
+if (!(Test-Path $LogDir)) {
+    New-Item -ItemType Directory -Path $LogDir -Force | Out-Null
+}
+
+Start-Transcript -Path $LogFile -Encoding UTF8
+
+Write-Host ""
+Write-Host "============================================================" -ForegroundColor Cyan
+Write-Host " Limpeza e manutenção segura do Windows - $ScriptVersion" -ForegroundColor Cyan
+Write-Host "============================================================" -ForegroundColor Cyan
+Write-Host "Log: $LogFile" -ForegroundColor Yellow
+
+Write-Step "Coletando informações iniciais do disco C:" 5
+$DiskBefore = Get-DiskInfo
+$DiskBefore | Format-Table -AutoSize
+
+Write-Step "Limpando arquivos temporários do usuário atual" 10
+Invoke-Safe "TEMP do usuário atual" {
+    Remove-SafePath -Path "$env:TEMP"
+}
+
+Write-Step "Limpando arquivos temporários dos perfis locais" 18
+Invoke-Safe "TEMP dos perfis em C:\Users" {
+    Get-ChildItem "C:\Users" -Directory -Force -ErrorAction SilentlyContinue |
+        ForEach-Object {
+            Remove-SafePath -Path "$($_.FullName)\AppData\Local\Temp"
+        }
+}
+
+Write-Step "Limpando temporários do Windows" 25
+Invoke-Safe "C:\Windows\Temp" {
+    Remove-SafePath -Path "C:\Windows\Temp"
+}
+
+Write-Step "Removendo dumps de memória e falhas" 35
+Invoke-Safe "Minidumps" {
+    Remove-SafePath -Path "C:\Windows\Minidump"
+}
+
+Invoke-Safe "MEMORY.DMP" {
+    Remove-Item "C:\Windows\MEMORY.DMP" -Force -ErrorAction SilentlyContinue
+}
+
+Invoke-Safe "Relatórios WER do sistema com mais de 7 dias" {
+    Remove-SafePath -Path "C:\ProgramData\Microsoft\Windows\WER\ReportArchive" -OlderThanDays 7
+    Remove-SafePath -Path "C:\ProgramData\Microsoft\Windows\WER\ReportQueue" -OlderThanDays 7
+}
+
+Invoke-Safe "Relatórios WER dos usuários com mais de 7 dias" {
+    Get-ChildItem "C:\Users" -Directory -Force -ErrorAction SilentlyContinue |
+        ForEach-Object {
+            Remove-SafePath -Path "$($_.FullName)\AppData\Local\Microsoft\Windows\WER\ReportArchive" -OlderThanDays 7
+            Remove-SafePath -Path "$($_.FullName)\AppData\Local\Microsoft\Windows\WER\ReportQueue" -OlderThanDays 7
+        }
+}
+
+Write-Step "Limpando logs antigos não essenciais" 45
+Invoke-Safe "Logs antigos em C:\Windows\Logs com mais de 30 dias" {
+    Remove-SafePath -Path "C:\Windows\Logs" -OlderThanDays 30
+}
+
+Invoke-Safe "Logs antigos do DISM com mais de 15 dias" {
+    Remove-SafePath -Path "C:\Windows\Logs\DISM" -OlderThanDays 15
+}
+
+Invoke-Safe "Logs antigos do CBS preservando CBS.log ativo" {
+    Get-ChildItem "C:\Windows\Logs\CBS" -Force -ErrorAction SilentlyContinue |
+        Where-Object {
+            $_.Name -ne "CBS.log" -and $_.LastWriteTime -lt (Get-Date).AddDays(-15)
+        } |
+        Remove-Item -Force -Recurse -ErrorAction SilentlyContinue
+}
+
+Write-Step "Limpando cache de miniaturas e ícones dos usuários" 55
+Invoke-Safe "thumbcache_*.db e iconcache_*.db" {
+    Get-ChildItem "C:\Users" -Directory -Force -ErrorAction SilentlyContinue |
+        ForEach-Object {
+            Remove-Item "$($_.FullName)\AppData\Local\Microsoft\Windows\Explorer\thumbcache_*.db" -Force -ErrorAction SilentlyContinue
+            Remove-Item "$($_.FullName)\AppData\Local\Microsoft\Windows\Explorer\iconcache_*.db" -Force -ErrorAction SilentlyContinue
+        }
+}
+
+if (-not $NoUpdateCache) {
+    Write-Step "Limpando cache de download do Windows Update" 65
+
+    Invoke-Safe "Parar serviços wuauserv e bits" {
+        Stop-Service wuauserv,bits -Force -ErrorAction SilentlyContinue
+    }
+
+    Invoke-Safe "Limpar C:\Windows\SoftwareDistribution\Download" {
+        Remove-SafePath -Path "C:\Windows\SoftwareDistribution\Download"
+    }
+
+    Invoke-Safe "Iniciar serviços wuauserv e bits" {
+        Start-Service wuauserv,bits -ErrorAction SilentlyContinue
+    }
+}
+
+if (-not $NoRecycleBin) {
+    Write-Step "Esvaziando lixeira" 72
+    Invoke-Safe "Clear-RecycleBin" {
+        Clear-RecycleBin -Force -ErrorAction SilentlyContinue
+    }
+}
+
+Write-Step "Executando limpeza integrada do Windows" 78
+Invoke-Safe "cleanmgr /verylowdisk" {
+    Start-Process cleanmgr.exe -ArgumentList "/verylowdisk" -Wait
+}
+
+if (-not $NoSfc) {
+    Write-Step "Executando verificação de integridade SFC" 84
+    Invoke-Safe "sfc /scannow" {
+        sfc /scannow
+    }
+
+    Write-Step "Executando limpeza do Component Store via DISM" 88
+    Invoke-Safe "DISM StartComponentCleanup" {
+        dism.exe /Online /Cleanup-Image /StartComponentCleanup
+    }
+
+    Write-Step "Executando restauração de integridade via DISM" 91
+    Invoke-Safe "DISM RestoreHealth" {
+        dism.exe /Online /Cleanup-Image /RestoreHealth
+    }
+}
+
+if ($DisableHibernation) {
+    Write-Step "Desabilitando hibernação" 93
+    Invoke-Safe "powercfg /h off" {
+        powercfg.exe /h off
+    }
+}
+
+if ($SetPageFile) {
+    Write-Step "Configurando arquivo de paginação para $PageFileGB GB" 95
+
+    Invoke-Safe "Configuração do pagefile" {
+        if ($PageFileGB -le 0) {
+            throw "O valor de PageFileGB precisa ser maior que zero."
+        }
+
+        $PageFileMB = $PageFileGB * 1024
+
+        $ComputerSystem = Get-CimInstance Win32_ComputerSystem
+        $ComputerSystem | Set-CimInstance -Property @{ AutomaticManagedPagefile = $false }
+
+        $PageFile = Get-CimInstance Win32_PageFileSetting -ErrorAction SilentlyContinue
+
+        if ($PageFile) {
+            $PageFile | Set-CimInstance -Property @{
+                InitialSize = $PageFileMB
+                MaximumSize = $PageFileMB
+            }
+        }
+        else {
+            New-CimInstance -ClassName Win32_PageFileSetting -Property @{
+                Name        = "C:\pagefile.sys"
+                InitialSize = $PageFileMB
+                MaximumSize = $PageFileMB
+            } | Out-Null
+        }
+    }
+}
+
+if ($EnableCompactOS) {
+    Write-Step "Ativando CompactOS" 96
+    Invoke-Safe "compact /compactos:always" {
+        compact.exe /compactos:always
+    }
+}
+
+if (-not $NoOptimizeVolume) {
+    Write-Step "Otimizando volume C:" 97
+    Invoke-Safe "Optimize-Volume C:" {
+        Optimize-Volume -DriveLetter C -Verbose
+    }
+}
+
+Write-Step "Coletando informações finais do disco C:" 99
+$DiskAfter = Get-DiskInfo
+$DiskAfter | Format-Table -AutoSize
+
+try {
+    $FreedGB = [math]::Round(($DiskAfter.LivreGB - $DiskBefore.LivreGB), 2)
+    Write-Host ""
+    Write-Host "Espaço aproximado liberado: $FreedGB GB" -ForegroundColor Green
+}
+catch {
+    Write-Host "Não foi possível calcular o espaço liberado." -ForegroundColor Yellow
+}
+
+Write-Step "Finalizado" 100
+Write-Progress -Activity "Limpeza e manutenção segura do Windows" -Completed
+
+Stop-Transcript
+
+if (-not $NoReboot) {
+    Write-Host ""
+    Write-Host "Limpeza concluída. Reiniciando em 30 segundos..." -ForegroundColor Yellow
+    shutdown /r /t 30 /c "Reinício após limpeza e manutenção segura do sistema."
+}
+else {
+    Write-Host ""
+    Write-Host "Limpeza concluída sem reinicialização." -ForegroundColor Green
+    Write-Host "Log salvo em: $LogFile" -ForegroundColor Green
+}
