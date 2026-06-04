@@ -1,4 +1,7 @@
 .claude/*
+.claude-config/
+CLAUDE.md
+.env
 
 # ---> Kate
 # Swap Files #
