@@ -56,6 +56,58 @@ Scripts utilitários de uso geral para administração do dia a dia. Ferramentas
 
 ---
 
+---
+
+### `Analise-Espaco-Disco.ps1`
+
+**Função:** Varre os discos locais em busca de espaço desperdicado, gera relatório no estilo Baobab/Disk Usage Analyzer com Top 20 pastas e Top 10 arquivos. Operação **estritamente de leitura** — nenhuma alteração é realizada.
+
+**Principais ações:**
+
+| Etapa | Ação |
+|---|---|
+| Varredura | Percorre todos os volumes fixos (ou drive especificado) usando `System.IO` de alto desempenho |
+| Agregação | Calcula tamanho total de cada pasta incluindo subpastas (bottom-up aggregation) |
+| Pontos de reparse | Ignora junctions e links simbólicos para evitar loops e dupla contagem |
+| Ocultos/Sistema | Detecta atributos Hidden e System e pontua no relatório |
+| Desperdício | Estima espaço em 15 categorias conhecidas: temp, cache, dumps, Windows.old, lixeira, browsers, WinSxS, etc. |
+| Console | Exibe Top 20 pastas e Top 10 arquivos com barras ASCII proporcionais e código de cores |
+| HTML | Gera relatório com tabelas, barras de uso por volume e estimativa de limpeza |
+| PDF | Converte HTML para PDF via Chrome ou Edge headless (quando disponível) |
+
+**Parâmetros:**
+
+| Parâmetro | Padrão | Descrição |
+|---|---|---|
+| `-Drive` | todos os fixos | Letra(s) do volume a varrer (ex: `C`, `C,D`) |
+| `-OutputDir` | `C:\ti` | Diretório de saída do relatório HTML/PDF |
+| `-NaoPDF` | — | Gera apenas HTML, sem conversão para PDF |
+| `-Silent` | — | Sem progresso no console durante a varredura |
+
+**Uso básico:**
+
+```powershell
+# Varrer todos os volumes locais
+.\Analise-Espaco-Disco.ps1
+
+# Varrer apenas C: e salvar em D:\Relatorios
+.\Analise-Espaco-Disco.ps1 -Drive C -OutputDir "D:\Relatorios"
+
+# Apenas HTML, sem PDF
+.\Analise-Espaco-Disco.ps1 -NaoPDF
+
+# Múltiplos volumes, modo silencioso
+.\Analise-Espaco-Disco.ps1 -Drive C,D -Silent
+```
+
+**Requisitos:** Administrador local (para acessar pastas protegidas do sistema). Windows 10+. PowerShell 5.1+.
+
+**Saída:** `C:\ti\<timestamp>-Analise-Espaco-Disco.html` e `.pdf`
+
+**Log:** `C:\ti\<timestamp>-Analise-Espaco-Disco.log`
+
+---
+
 > **Outros scripts planejados para este diretório:**
 > - Coleta de informações rápidas do sistema (versão, hostname, IP)
 > - Geração de senha segura aleatória
