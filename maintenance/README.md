@@ -45,6 +45,7 @@ Scripts de manutenção preventiva e corretiva do sistema operacional Windows. F
 | `-SetPageFile` | — | Configura pagefile fixo |
 | `-PageFileGB` | `4` | Tamanho do pagefile em GB (1–64) |
 | `-EnableCompactOS` | — | Ativa CompactOS |
+| `-SomenteIntegridade` | — | Executa **apenas** SFC + DISM, ignorando toda a limpeza |
 | `-ChkdskAction` | `Ask` | `Schedule` \| `Skip` — omitir = prompt interativo |
 | `-EventLogCleanup` | `Ask` | `All` \| `ErrorOnly` \| `None` — omitir = prompt interativo |
 
@@ -59,6 +60,12 @@ Scripts de manutenção preventiva e corretiva do sistema operacional Windows. F
 
 # Limpeza completa com todas as opções, sem reboot
 .\limpeza-windows.ps1 -DisableHibernation -SetPageFile -PageFileGB 4 -EnableCompactOS -NoReboot
+
+# Somente SFC + DISM, sem nenhuma limpeza
+.\limpeza-windows.ps1 -SomenteIntegridade
+
+# Somente SFC + DISM, sem reiniciar
+.\limpeza-windows.ps1 -SomenteIntegridade -NoReboot
 
 # Agendar chkdsk automaticamente se houver falhas detectadas
 .\limpeza-windows.ps1 -ChkdskAction Schedule
