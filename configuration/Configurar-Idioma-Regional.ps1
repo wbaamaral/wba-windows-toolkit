@@ -426,7 +426,7 @@ Write-Host "Log: $LogFile" -ForegroundColor Yellow
 
 # Modo silencioso ou interativo
 if (-not $Silent) {
-    $tzInfo = if ($BrazilTimeZones.ContainsKey($TimeZone)) {
+    $tzInfo = if ($BrazilTimeZones.Contains($TimeZone)) {
         "$TimeZone ($($BrazilTimeZones[$TimeZone].UTC))"
     } else { $TimeZone }
 
