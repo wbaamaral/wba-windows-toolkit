@@ -533,7 +533,16 @@ if (-not (Test-Admin)) {
 }
 
 if (!(Test-Path $LogDir)) { New-Item -ItemType Directory -Path $LogDir -Force | Out-Null }
-if (-not $NoLog)          { Start-Transcript -Path $LogFile -Encoding UTF8 }
+$transcriptActive = $false
+if (-not $NoLog) {
+    try {
+        Start-Transcript -Path $LogFile -Encoding UTF8 -ErrorAction Stop
+        $transcriptActive = $true
+    }
+    catch {
+        Write-Warning "Nao foi possivel iniciar o log de transcricao: $($_.Exception.Message)"
+    }
+}
 
 Write-Host ""
 Write-Host "============================================================" -ForegroundColor Cyan
@@ -546,7 +555,7 @@ $profiles = Get-LocalProfiles
 if ($profiles.Count -eq 0) {
     Write-Host ""
     Write-Host "Nenhum perfil de usuario encontrado para gerenciar." -ForegroundColor Yellow
-    if (-not $NoLog) { Stop-Transcript }
+    if ($transcriptActive) { Stop-Transcript }
     exit 0
 }
 
@@ -588,4 +597,4 @@ else {
     Invoke-InteractiveMenu -Profiles $list
 }
 
-if (-not $NoLog) { Stop-Transcript }
+if ($transcriptActive) { Stop-Transcript }
