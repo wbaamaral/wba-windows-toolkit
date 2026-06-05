@@ -461,7 +461,14 @@ if (!(Test-Path $LogDir)) {
     New-Item -ItemType Directory -Path $LogDir -Force | Out-Null
 }
 
-Start-Transcript -Path $LogFile -Encoding UTF8
+$transcriptActive = $false
+try {
+    Start-Transcript -Path $LogFile -Encoding UTF8 -ErrorAction Stop
+    $transcriptActive = $true
+}
+catch {
+    Write-Warning "Nao foi possivel iniciar o log de transcricao: $($_.Exception.Message)"
+}
 
 Write-Host ""
 Write-Host "============================================================" -ForegroundColor Cyan
@@ -663,7 +670,7 @@ catch {
 Write-Step "Finalizado" 100
 Write-Progress -Activity "Limpeza e manutenção segura do Windows" -Completed
 
-Stop-Transcript
+if ($transcriptActive) { Stop-Transcript }
 
 if (-not $NoReboot) {
     Write-Host ""

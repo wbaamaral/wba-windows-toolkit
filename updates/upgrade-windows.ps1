@@ -292,11 +292,13 @@ if (!(Test-Path $LogDir)) {
     New-Item -ItemType Directory -Path $LogDir -Force | Out-Null
 }
 
+$transcriptActive = $false
 try {
-    Start-Transcript -Path $LogFile -Append
+    Start-Transcript -Path $LogFile -Append -ErrorAction Stop
+    $transcriptActive = $true
 }
 catch {
-    Write-Warn "Não foi possível iniciar o log de transcrição: $($_.Exception.Message)"
+    Write-Warn "Nao foi possivel iniciar o log de transcricao: $($_.Exception.Message)"
 }
 
 Write-Host ""
@@ -331,10 +333,7 @@ if (-not $NoRebootWarning) {
 Write-Info "Rotina finalizada."
 Write-Info "Log salvo em: $LogFile"
 
-try {
-    Stop-Transcript
-}
-catch {}
+if ($transcriptActive) { Stop-Transcript }
 
 if ($PauseAtEnd) {
     Write-Host ""
