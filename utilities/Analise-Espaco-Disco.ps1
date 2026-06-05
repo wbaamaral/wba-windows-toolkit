@@ -477,7 +477,7 @@ footer{text-align:center;padding:20px;font-size:11px;color:var(--muted)}
             $badge   = if ($isHid) { '<span class="badge badge-hidden">Oculto</span>' } `
                        elseif ($isSys) { '<span class="badge badge-system">Sistema</span>' } `
                        else { '<span class="badge badge-ok">Normal</span>' }
-            $allFolderRows += "<tr><td>$rank</td><td class='sz'>$(Format-FileSize $sz)</td><td class='pct'>$pctDisk%</td><td><div class='mini-bar' style='width:$([$Math]::Max(2,$pctBar))px'></div></td><td>$badge</td><td class='path'>$(Safe $entry.Key)</td></tr>"
+            $allFolderRows += "<tr><td>$rank</td><td class='sz'>$(Format-FileSize $sz)</td><td class='pct'>$pctDisk%</td><td><div class='mini-bar' style='width:$([Math]::Max(2,$pctBar))px'></div></td><td>$badge</td><td class='path'>$(Safe $entry.Key)</td></tr>"
             $rank++
         }
     }
