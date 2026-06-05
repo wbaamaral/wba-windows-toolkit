@@ -54,31 +54,31 @@
 
 .USO
     Execução padrão:
-        .\limpeza-windows-final.ps1
+        .\limpeza-windows.ps1
 
     Execução sem reiniciar:
-        .\limpeza-windows-final.ps1 -NoReboot
+        .\limpeza-windows.ps1 -NoReboot
 
     Execução sem SFC/DISM:
-        .\limpeza-windows-final.ps1 -NoSfc
+        .\limpeza-windows.ps1 -NoSfc
 
     Execução sem limpar cache do Windows Update:
-        .\limpeza-windows-final.ps1 -NoUpdateCache
+        .\limpeza-windows.ps1 -NoUpdateCache
 
     Execução sem esvaziar lixeira:
-        .\limpeza-windows-final.ps1 -NoRecycleBin
+        .\limpeza-windows.ps1 -NoRecycleBin
 
     Execução desativando hibernação:
-        .\limpeza-windows-final.ps1 -DisableHibernation
+        .\limpeza-windows.ps1 -DisableHibernation
 
     Execução configurando arquivo de paginação para 4 GB:
-        .\limpeza-windows-final.ps1 -SetPageFile -PageFileGB 4
+        .\limpeza-windows.ps1 -SetPageFile -PageFileGB 4
 
     Execução ativando CompactOS:
-        .\limpeza-windows-final.ps1 -EnableCompactOS
+        .\limpeza-windows.ps1 -EnableCompactOS
 
     Execução completa, sem reboot:
-        .\limpeza-windows-final.ps1 -DisableHibernation -SetPageFile -PageFileGB 4 -EnableCompactOS -NoReboot
+        .\limpeza-windows.ps1 -DisableHibernation -SetPageFile -PageFileGB 4 -EnableCompactOS -NoReboot
 
     Caso a política de execução bloqueie o script, execute antes:
         Set-ExecutionPolicy Bypass -Scope Process -Force
@@ -87,15 +87,6 @@
     Recomendado executar em PowerShell como Administrador.
     Testado conceitualmente para Windows 10 Pro com PowerShell 5.1 ou superior.
 #>
-[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
-[Console]::InputEncoding  = [System.Text.Encoding]::UTF8
-$OutputEncoding           = [System.Text.Encoding]::UTF8
-
-$PSDefaultParameterValues['Out-File:Encoding'] = 'utf8'
-$PSDefaultParameterValues['Set-Content:Encoding'] = 'utf8'
-$PSDefaultParameterValues['Add-Content:Encoding'] = 'utf8'
-
-chcp 65001 | Out-Null
 param (
     [switch]$Help,
     [switch]$Version,
@@ -107,22 +98,35 @@ param (
 
     [switch]$DisableHibernation,
     [switch]$SetPageFile,
-    [int]$PageFileGB = 4,
 
     [switch]$EnableCompactOS,
-    [switch]$NoOptimizeVolume
+    [switch]$NoOptimizeVolume,
+
+    [ValidateRange(1, 64)]
+    [int]$PageFileGB = 4
 )
 
-$ScriptVersion = "v1.0-final"
+[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+[Console]::InputEncoding  = [System.Text.Encoding]::UTF8
+$OutputEncoding           = [System.Text.Encoding]::UTF8
+
+$PSDefaultParameterValues['Out-File:Encoding'] = 'utf8'
+$PSDefaultParameterValues['Set-Content:Encoding'] = 'utf8'
+$PSDefaultParameterValues['Add-Content:Encoding'] = 'utf8'
+
+chcp 65001 | Out-Null
+
+$ScriptVersion = "v1.0"
+$ScriptName    = $MyInvocation.MyCommand.Name
 $LogDir = "C:\ti"
-$LogFile = Join-Path $LogDir "$((Get-Date).ToString('yyyy-MM-dd_HH-mm-ss'))-limpeza-windows-final.log"
+$LogFile = Join-Path $LogDir "$((Get-Date).ToString('yyyy-MM-dd_HH-mm-ss'))-$([System.IO.Path]::GetFileNameWithoutExtension($ScriptName)).log"
 
 function Show-Help {
     Write-Host ""
     Write-Host "Limpeza segura e manutenção do Windows 10 Pro" -ForegroundColor Cyan
     Write-Host ""
     Write-Host "Uso:"
-    Write-Host "  .\limpeza-windows-final.ps1 [opções]"
+    Write-Host "  .\$ScriptName [opções]"
     Write-Host ""
     Write-Host "Opções:"
     Write-Host "  -Help                 Mostra esta ajuda"
@@ -138,11 +142,11 @@ function Show-Help {
     Write-Host "  -NoOptimizeVolume     Não executa Optimize-Volume"
     Write-Host ""
     Write-Host "Exemplos:"
-    Write-Host "  .\limpeza-windows-final.ps1 -NoReboot"
-    Write-Host "  .\limpeza-windows-final.ps1 -NoSfc -NoReboot"
-    Write-Host "  .\limpeza-windows-final.ps1 -DisableHibernation -NoReboot"
-    Write-Host "  .\limpeza-windows-final.ps1 -SetPageFile -PageFileGB 4 -NoReboot"
-    Write-Host "  .\limpeza-windows-final.ps1 -DisableHibernation -SetPageFile -PageFileGB 4 -EnableCompactOS -NoReboot"
+    Write-Host "  .\$ScriptName -NoReboot"
+    Write-Host "  .\$ScriptName -NoSfc -NoReboot"
+    Write-Host "  .\$ScriptName -DisableHibernation -NoReboot"
+    Write-Host "  .\$ScriptName -SetPageFile -PageFileGB 4 -NoReboot"
+    Write-Host "  .\$ScriptName -DisableHibernation -SetPageFile -PageFileGB 4 -EnableCompactOS -NoReboot"
     Write-Host ""
     Write-Host "Caso necessário:"
     Write-Host "  Set-ExecutionPolicy Bypass -Scope Process -Force"
@@ -179,6 +183,7 @@ function Invoke-Safe {
     catch {
         Write-Host "Falha em: $Description" -ForegroundColor Red
         Write-Host $_.Exception.Message -ForegroundColor Red
+        Write-Warning "ERRO em '$Description': $($_.Exception.Message)"
     }
 }
 
@@ -206,7 +211,7 @@ function Remove-SafePath {
 }
 
 function Get-DiskInfo {
-    Get-CimInstance Win32_LogicalDisk -Filter "DeviceID='C:'" |
+    Get-CimInstance Win32_LogicalDisk -Filter "DeviceID='$env:SystemDrive'" |
         Select-Object DeviceID,
         @{Name = "TamanhoGB"; Expression = { [math]::Round($_.Size / 1GB, 2) } },
         @{Name = "LivreGB"; Expression = { [math]::Round($_.FreeSpace / 1GB, 2) } }
@@ -223,7 +228,15 @@ if ($Version) {
 }
 
 if (-not (Test-Admin)) {
-    Start-Process powershell.exe -ArgumentList "-NoProfile -ExecutionPolicy Bypass -File `"$PSCommandPath`" $args" -Verb RunAs
+    $relaunchArgs = foreach ($kv in $PSBoundParameters.GetEnumerator()) {
+        if ($kv.Value -is [switch]) {
+            if ($kv.Value.IsPresent) { "-$($kv.Key)" }
+        } else {
+            "-$($kv.Key)"; "$($kv.Value)"
+        }
+    }
+    $allArgs = @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', "`"$PSCommandPath`"") + $relaunchArgs
+    Start-Process powershell.exe -ArgumentList $allArgs -Verb RunAs
     exit
 }
 
@@ -257,17 +270,17 @@ Invoke-Safe "TEMP dos perfis em C:\Users" {
 }
 
 Write-Step "Limpando temporários do Windows" 25
-Invoke-Safe "C:\Windows\Temp" {
-    Remove-SafePath -Path "C:\Windows\Temp"
+Invoke-Safe "$env:SystemRoot\Temp" {
+    Remove-SafePath -Path "$env:SystemRoot\Temp"
 }
 
 Write-Step "Removendo dumps de memória e falhas" 35
 Invoke-Safe "Minidumps" {
-    Remove-SafePath -Path "C:\Windows\Minidump"
+    Remove-SafePath -Path "$env:SystemRoot\Minidump"
 }
 
 Invoke-Safe "MEMORY.DMP" {
-    Remove-Item "C:\Windows\MEMORY.DMP" -Force -ErrorAction SilentlyContinue
+    Remove-Item "$env:SystemRoot\MEMORY.DMP" -Force -ErrorAction SilentlyContinue
 }
 
 Invoke-Safe "Relatórios WER do sistema com mais de 7 dias" {
@@ -284,16 +297,16 @@ Invoke-Safe "Relatórios WER dos usuários com mais de 7 dias" {
 }
 
 Write-Step "Limpando logs antigos não essenciais" 45
-Invoke-Safe "Logs antigos em C:\Windows\Logs com mais de 30 dias" {
-    Remove-SafePath -Path "C:\Windows\Logs" -OlderThanDays 30
+Invoke-Safe "Logs antigos em $env:SystemRoot\Logs com mais de 30 dias" {
+    Remove-SafePath -Path "$env:SystemRoot\Logs" -OlderThanDays 30
 }
 
 Invoke-Safe "Logs antigos do DISM com mais de 15 dias" {
-    Remove-SafePath -Path "C:\Windows\Logs\DISM" -OlderThanDays 15
+    Remove-SafePath -Path "$env:SystemRoot\Logs\DISM" -OlderThanDays 15
 }
 
 Invoke-Safe "Logs antigos do CBS preservando CBS.log ativo" {
-    Get-ChildItem "C:\Windows\Logs\CBS" -Force -ErrorAction SilentlyContinue |
+    Get-ChildItem "$env:SystemRoot\Logs\CBS" -Force -ErrorAction SilentlyContinue |
         Where-Object {
             $_.Name -ne "CBS.log" -and $_.LastWriteTime -lt (Get-Date).AddDays(-15)
         } |
@@ -312,16 +325,20 @@ Invoke-Safe "thumbcache_*.db e iconcache_*.db" {
 if (-not $NoUpdateCache) {
     Write-Step "Limpando cache de download do Windows Update" 65
 
+    $WuState   = (Get-Service wuauserv -ErrorAction SilentlyContinue).Status
+    $BitsState = (Get-Service bits     -ErrorAction SilentlyContinue).Status
+
     Invoke-Safe "Parar serviços wuauserv e bits" {
         Stop-Service wuauserv,bits -Force -ErrorAction SilentlyContinue
     }
 
-    Invoke-Safe "Limpar C:\Windows\SoftwareDistribution\Download" {
-        Remove-SafePath -Path "C:\Windows\SoftwareDistribution\Download"
+    Invoke-Safe "Limpar $env:SystemRoot\SoftwareDistribution\Download" {
+        Remove-SafePath -Path "$env:SystemRoot\SoftwareDistribution\Download"
     }
 
-    Invoke-Safe "Iniciar serviços wuauserv e bits" {
-        Start-Service wuauserv,bits -ErrorAction SilentlyContinue
+    Invoke-Safe "Restaurar serviços wuauserv e bits" {
+        if ($WuState   -eq 'Running') { Start-Service wuauserv -ErrorAction SilentlyContinue }
+        if ($BitsState -eq 'Running') { Start-Service bits     -ErrorAction SilentlyContinue }
     }
 }
 
@@ -333,8 +350,12 @@ if (-not $NoRecycleBin) {
 }
 
 Write-Step "Executando limpeza integrada do Windows" 78
-Invoke-Safe "cleanmgr /verylowdisk" {
-    Start-Process cleanmgr.exe -ArgumentList "/verylowdisk" -Wait
+Invoke-Safe "cleanmgr silencioso (sageset:99 + sagerun:99)" {
+    $cleanKey = "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\VolumeCaches"
+    Get-ChildItem $cleanKey -ErrorAction SilentlyContinue | ForEach-Object {
+        Set-ItemProperty -Path $_.PSPath -Name StateFlags0099 -Type DWord -Value 2 -ErrorAction SilentlyContinue
+    }
+    Start-Process cleanmgr.exe -ArgumentList "/sagerun:99" -Wait -ErrorAction SilentlyContinue
 }
 
 if (-not $NoSfc) {
@@ -365,10 +386,6 @@ if ($SetPageFile) {
     Write-Step "Configurando arquivo de paginação para $PageFileGB GB" 95
 
     Invoke-Safe "Configuração do pagefile" {
-        if ($PageFileGB -le 0) {
-            throw "O valor de PageFileGB precisa ser maior que zero."
-        }
-
         $PageFileMB = $PageFileGB * 1024
 
         $ComputerSystem = Get-CimInstance Win32_ComputerSystem
@@ -384,7 +401,7 @@ if ($SetPageFile) {
         }
         else {
             New-CimInstance -ClassName Win32_PageFileSetting -Property @{
-                Name        = "C:\pagefile.sys"
+                Name        = "$env:SystemDrive\pagefile.sys"
                 InitialSize = $PageFileMB
                 MaximumSize = $PageFileMB
             } | Out-Null
@@ -400,9 +417,10 @@ if ($EnableCompactOS) {
 }
 
 if (-not $NoOptimizeVolume) {
-    Write-Step "Otimizando volume C:" 97
-    Invoke-Safe "Optimize-Volume C:" {
-        Optimize-Volume -DriveLetter C -Verbose
+    $driveLetter = $env:SystemDrive.TrimEnd(':')
+    Write-Step "Otimizando volume $env:SystemDrive" 97
+    Invoke-Safe "Optimize-Volume $env:SystemDrive" {
+        Optimize-Volume -DriveLetter $driveLetter -Verbose
     }
 }
 
