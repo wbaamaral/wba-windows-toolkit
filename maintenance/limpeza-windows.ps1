@@ -62,6 +62,9 @@
     Execução sem reiniciar:
         .\limpeza-windows.ps1 -NoReboot
 
+    Executar SOMENTE SFC + DISM (nenhuma limpeza):
+        .\limpeza-windows.ps1 -SomenteIntegridade
+
     Execução sem SFC/DISM:
         .\limpeza-windows.ps1 -NoSfc
 
@@ -108,6 +111,7 @@ param (
 
     [switch]$NoReboot,
     [switch]$NoSfc,
+    [switch]$SomenteIntegridade,
     [switch]$NoUpdateCache,
     [switch]$NoRecycleBin,
 
@@ -159,6 +163,7 @@ function Show-Help {
     Write-Host "  -Version              Mostra a versão"
     Write-Host "  -NoReboot             Não reinicia ao final"
     Write-Host "  -NoSfc                Não executa SFC/DISM"
+    Write-Host "  -SomenteIntegridade   Executa APENAS SFC + DISM, ignora toda a limpeza"
     Write-Host "  -NoUpdateCache        Não limpa cache do Windows Update"
     Write-Host "  -NoRecycleBin         Não esvazia a lixeira"
     Write-Host "  -DisableHibernation   Desativa hibernação"
@@ -172,6 +177,8 @@ function Show-Help {
     Write-Host ""
     Write-Host "Exemplos:"
     Write-Host "  .\$ScriptName -NoReboot"
+    Write-Host "  .\$ScriptName -SomenteIntegridade"
+    Write-Host "  .\$ScriptName -SomenteIntegridade -NoReboot"
     Write-Host "  .\$ScriptName -NoSfc -NoReboot"
     Write-Host "  .\$ScriptName -DisableHibernation -NoReboot"
     Write-Host "  .\$ScriptName -SetPageFile -PageFileGB 4 -NoReboot"
@@ -475,6 +482,45 @@ Write-Host "============================================================" -Foreg
 Write-Host " Limpeza e manutenção segura do Windows - $ScriptVersion" -ForegroundColor Cyan
 Write-Host "============================================================" -ForegroundColor Cyan
 Write-Host "Log: $LogFile" -ForegroundColor Yellow
+
+if ($SomenteIntegridade) {
+    Write-Host ""
+    Write-Host "Modo: apenas verificacao de integridade SFC + DISM (nenhuma limpeza sera executada)" -ForegroundColor Yellow
+    Write-Host ""
+
+    Write-Step "Executando verificacao de integridade SFC" 30
+    Invoke-Safe "sfc /scannow" {
+        sfc /scannow
+    }
+
+    Write-Step "Executando limpeza do Component Store via DISM" 60
+    Invoke-Safe "DISM StartComponentCleanup" {
+        dism.exe /Online /Cleanup-Image /StartComponentCleanup
+    }
+
+    Write-Step "Executando restauracao de integridade via DISM" 90
+    Invoke-Safe "DISM RestoreHealth" {
+        dism.exe /Online /Cleanup-Image /RestoreHealth
+    }
+
+    Write-Step "Verificacao de integridade concluida" 100
+    Write-Progress -Activity "Limpeza e manutenção segura do Windows" -Completed
+
+    if ($transcriptActive) { Stop-Transcript }
+
+    if (-not $NoReboot) {
+        Write-Host ""
+        Write-Host "Verificacao concluida. Reiniciando em 30 segundos..." -ForegroundColor Yellow
+        shutdown /r /t 30 /c "Reinicio apos verificacao de integridade SFC/DISM."
+    }
+    else {
+        Write-Host ""
+        Write-Host "Verificacao de integridade concluida sem reinicializacao." -ForegroundColor Green
+        Write-Host "Log salvo em: $LogFile" -ForegroundColor Green
+    }
+
+    exit 0
+}
 
 Write-Step "Coletando informações iniciais do disco C:" 5
 $DiskBefore = Get-DiskInfo
