@@ -63,7 +63,7 @@
         .\limpeza-windows.ps1 -NoReboot
 
     Executar SOMENTE SFC + DISM (nenhuma limpeza):
-        .\limpeza-windows.ps1 -SomenteIntegridade
+        .\limpeza-windows.ps1 -RepararSistema
 
     Execução sem SFC/DISM:
         .\limpeza-windows.ps1 -NoSfc
@@ -111,7 +111,7 @@ param (
 
     [switch]$NoReboot,
     [switch]$NoSfc,
-    [switch]$SomenteIntegridade,
+    [switch]$RepararSistema,
     [switch]$NoUpdateCache,
     [switch]$NoRecycleBin,
 
@@ -163,7 +163,7 @@ function Show-Help {
     Write-Host "  -Version              Mostra a versão"
     Write-Host "  -NoReboot             Não reinicia ao final"
     Write-Host "  -NoSfc                Não executa SFC/DISM"
-    Write-Host "  -SomenteIntegridade   Executa APENAS SFC + DISM, ignora toda a limpeza"
+    Write-Host "  -RepararSistema   Executa APENAS SFC + DISM, ignora toda a limpeza"
     Write-Host "  -NoUpdateCache        Não limpa cache do Windows Update"
     Write-Host "  -NoRecycleBin         Não esvazia a lixeira"
     Write-Host "  -DisableHibernation   Desativa hibernação"
@@ -177,8 +177,8 @@ function Show-Help {
     Write-Host ""
     Write-Host "Exemplos:"
     Write-Host "  .\$ScriptName -NoReboot"
-    Write-Host "  .\$ScriptName -SomenteIntegridade"
-    Write-Host "  .\$ScriptName -SomenteIntegridade -NoReboot"
+    Write-Host "  .\$ScriptName -RepararSistema"
+    Write-Host "  .\$ScriptName -RepararSistema -NoReboot"
     Write-Host "  .\$ScriptName -NoSfc -NoReboot"
     Write-Host "  .\$ScriptName -DisableHibernation -NoReboot"
     Write-Host "  .\$ScriptName -SetPageFile -PageFileGB 4 -NoReboot"
@@ -483,7 +483,7 @@ Write-Host " Limpeza e manutenção segura do Windows - $ScriptVersion" -Foregro
 Write-Host "============================================================" -ForegroundColor Cyan
 Write-Host "Log: $LogFile" -ForegroundColor Yellow
 
-if ($SomenteIntegridade) {
+if ($RepararSistema) {
     Write-Host ""
     Write-Host "Modo: apenas verificacao de integridade SFC + DISM (nenhuma limpeza sera executada)" -ForegroundColor Yellow
     Write-Host ""
