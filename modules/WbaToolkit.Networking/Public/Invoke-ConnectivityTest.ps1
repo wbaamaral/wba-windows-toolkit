@@ -1,4 +1,4 @@
-function Invoke-ConnectivityTest {
+﻿function Invoke-ConnectivityTest {
     <#
     .SYNOPSIS
         Executa a bateria de conectividade e retorna um relatório estruturado.

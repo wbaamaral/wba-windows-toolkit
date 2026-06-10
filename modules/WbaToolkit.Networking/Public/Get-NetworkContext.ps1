@@ -1,4 +1,4 @@
-function Get-NetworkContext {
+﻿function Get-NetworkContext {
     <#
     .SYNOPSIS
         Coleta o contexto local de rede.

@@ -1,4 +1,4 @@
-function Test-LocalUdpListener {
+﻿function Test-LocalUdpListener {
     <#
     .SYNOPSIS
         Verifica se há endpoint UDP local em uma porta.

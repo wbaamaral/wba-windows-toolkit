@@ -1,4 +1,4 @@
-function Test-TcpPortConnectivity {
+﻿function Test-TcpPortConnectivity {
     <#
     .SYNOPSIS
         Executa teste de conectividade TCP em porta informada.

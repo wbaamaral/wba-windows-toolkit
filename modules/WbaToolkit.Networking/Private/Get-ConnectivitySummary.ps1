@@ -1,4 +1,4 @@
-function Get-ConnectivitySummary {
+﻿function Get-ConnectivitySummary {
     [CmdletBinding()]
     param(
         [Parameter(Mandatory = $true)]

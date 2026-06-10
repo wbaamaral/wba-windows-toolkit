@@ -1,4 +1,4 @@
-function New-ConnectivityResult {
+﻿function New-ConnectivityResult {
     [CmdletBinding()]
     param(
         [Parameter(Mandatory = $true)]
