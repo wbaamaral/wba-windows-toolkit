@@ -16,8 +16,9 @@ O objetivo é explicar:
 - como liberar a execução temporária de scripts;
 - como importar módulos;
 - como listar e chamar os comandos dos módulos;
+- como configurar a pasta padrão de relatórios;
 - como gerar o manual HTML local;
-- como operar os scripts `Diagnostico-Reparo-HD100.ps1`, `limpeza-windows.ps1` e `upgrade-windows.ps1`;
+- como operar os principais scripts de diagnóstico, inventário, manutenção e atualização;
 - onde encontrar logs, relatórios e arquivos gerados.
 
 ## 1. Conceitos básicos
@@ -33,7 +34,11 @@ Ele é organizado em pastas:
 |---|---|
 | `maintenance` | Scripts de manutenção, limpeza e diagnóstico de disco |
 | `updates` | Scripts de atualização do Windows e pacotes |
-| `diagnostics` | Scripts de diagnóstico geral |
+| `diagnostics` | Scripts de diagnóstico de rede, vídeo e outros componentes |
+| `inventory` | Inventário de hardware, software e drivers |
+| `active-directory` | Diagnósticos e reparos relacionados a domínio Active Directory |
+| `configuration` | Padronização de configurações do Windows |
+| `utilities` | Ferramentas auxiliares |
 | `modules` | Funções reutilizáveis usadas pelos scripts |
 | `docs` | Documentação do projeto |
 
@@ -181,6 +186,10 @@ módulo, essas funções podem ser chamadas diretamente no PowerShell.
 | `Read-YesNo` | Pergunta Sim/Não ao operador |
 | `Invoke-ExternalCommand` | Executa comando externo com controle |
 | `ConvertTo-HtmlSafe` | Escapa texto para HTML |
+| `Get-ToolkitConfiguration` | Lê a configuração persistente do toolkit |
+| `Set-ToolkitReportsRoot` | Salva a raiz padrão de relatórios |
+| `Get-ToolkitReportsRoot` | Resolve a raiz de relatórios a ser usada |
+| `Initialize-ToolkitReportSession` | Cria uma sessão padronizada de relatório |
 | `Export-ToolkitFunctionDocs` | Gera manual HTML local dos módulos e scripts |
 
 ### 4.2. Funções do módulo `WbaToolkit.Networking`
@@ -213,9 +222,62 @@ $report = Invoke-TargetConnectivityTest -TargetAddress 192.168.5.10 -Protocol TC
 Show-ConnectivityReport -Report $report
 ```
 
-## 5. Como gerar o manual HTML local
+## 5. Pasta padrão de relatórios
 
-### 5.1. O que a função faz
+### 5.1. Como o toolkit escolhe o local
+
+Os scripts devem gravar relatórios em uma sessão padronizada. A ordem de escolha é:
+
+1. caminho informado no parâmetro do script, como `-DiretorioSaida` ou `-OutputDir`;
+2. caminho salvo na configuração global do toolkit;
+3. padrão `C:\WBA\Relatorios`, quando não houver configuração.
+
+Dentro dessa raiz, cada script cria uma pasta do módulo e uma pasta da execução:
+
+```text
+C:\WBA\Relatorios\<Modulo>\<timestamp>\
+```
+
+Exemplos:
+
+```text
+C:\WBA\Relatorios\HD100\2026-06-10_153000\
+C:\WBA\Relatorios\Inventory\2026-06-10_153000\
+C:\WBA\Relatorios\Diagnostics\2026-06-10_153000\
+C:\WBA\Relatorios\Maintenance\2026-06-10_153000\
+C:\WBA\Relatorios\Updates\2026-06-10_153000\
+```
+
+### 5.2. Definir um local permanente
+
+Use esta opção quando a equipe quiser que todos os relatórios sejam criados em outro disco, pasta técnica ou
+compartilhamento de rede.
+
+```powershell
+Import-Module .\modules\WbaToolkit.Core\WbaToolkit.Core.psd1 -Force
+Set-ToolkitReportsRoot -Path "D:\Relatorios\WBA"
+Get-ToolkitReportsRoot
+```
+
+A configuração fica gravada em:
+
+```text
+C:\ProgramData\WBA\WindowsToolkit\config.json
+```
+
+### 5.3. Usar outro local somente em uma execução
+
+Quando quiser alterar apenas uma execução, use o parâmetro do próprio script:
+
+```powershell
+.\maintenance\Diagnostico-Reparo-HD100.ps1 -DiretorioSaida "D:\Atendimentos\Cliente01" -GerarHtml
+```
+
+Essa escolha não altera a configuração permanente.
+
+## 6. Como gerar o manual HTML local
+
+### 6.1. O que a função faz
 
 A função `Export-ToolkitFunctionDocs` gera um conjunto de páginas HTML locais com:
 
@@ -228,7 +290,7 @@ A função `Export-ToolkitFunctionDocs` gera um conjunto de páginas HTML locais
 
 Ela não envia dados para a internet. O resultado é um diretório local que pode ser aberto no navegador.
 
-### 5.2. Quando usar
+### 6.2. Quando usar
 
 Use quando quiser consultar a documentação do toolkit em formato visual, com páginas HTML navegáveis.
 
@@ -239,7 +301,7 @@ Exemplos de uso:
 - abrir manual no navegador durante atendimento;
 - gerar material local em um computador sem internet.
 
-### 5.3. Como gerar o manual padrão
+### 6.3. Como gerar o manual padrão
 
 Entre na raiz do projeto:
 
@@ -265,7 +327,7 @@ Abra no navegador:
 Start-Process .\docs-html\index.html
 ```
 
-### 5.4. Onde ficam os arquivos
+### 6.4. Onde ficam os arquivos
 
 Por padrão, se usar `.\docs-html`, a estrutura será:
 
@@ -283,7 +345,7 @@ O arquivo principal é:
 docs-html\index.html
 ```
 
-### 5.5. Como atualizar o manual
+### 6.5. Como atualizar o manual
 
 Sempre que novos scripts ou funções forem adicionados, gere novamente:
 
@@ -293,7 +355,7 @@ Export-ToolkitFunctionDocs -OutputPath .\docs-html -Force
 
 O parâmetro `-Force` permite recriar o diretório mesmo que ele já exista.
 
-### 5.6. Como gerar em outra pasta
+### 6.6. Como gerar em outra pasta
 
 Exemplo:
 
@@ -302,7 +364,7 @@ Export-ToolkitFunctionDocs -OutputPath C:\ti\manual-wba -Force
 Start-Process C:\ti\manual-wba\index.html
 ```
 
-### 5.7. Erros comuns
+### 6.7. Erros comuns
 
 | Erro | Causa comum | Como resolver |
 |---|---|---|
@@ -311,15 +373,15 @@ Start-Process C:\ti\manual-wba\index.html
 | Caminho gerado em pasta errada | PowerShell estava em outro diretório | Rode `Set-Location C:\ti\wba-windows-toolkit` antes |
 | HTML abre sem estilo esperado | Arquivo aberto incorreto | Abra `index.html` na raiz do diretório gerado |
 
-## 6. Script `Diagnostico-Reparo-HD100.ps1`
+## 7. Script `Diagnostico-Reparo-HD100.ps1`
 
-### 6.1. Finalidade
+### 7.1. Finalidade
 
 O script `Diagnostico-Reparo-HD100.ps1` ajuda a investigar o problema conhecido como “Disco 100%” ou “HD100”.
 
 Ele coleta informações técnicas, gera relatórios e, no modo assistido, permite algumas ações controladas.
 
-### 6.2. Quando usar
+### 7.2. Quando usar
 
 Use quando o computador apresentar:
 
@@ -329,7 +391,7 @@ Use quando o computador apresentar:
 - demora excessiva após login;
 - suspeita de problema em disco, serviços, atualização, antivírus ou programas na inicialização.
 
-### 6.3. Quando não usar sem apoio técnico
+### 7.3. Quando não usar sem apoio técnico
 
 Pare e chame alguém mais experiente se:
 
@@ -339,7 +401,7 @@ Pare e chame alguém mais experiente se:
 - o computador contiver dados importantes sem backup;
 - o equipamento estiver em produção crítica.
 
-### 6.4. Execução recomendada
+### 7.4. Execução recomendada
 
 Entre na pasta do projeto:
 
@@ -355,7 +417,7 @@ Execute em modo diagnóstico com HTML:
 
 Esse modo é o mais seguro para começar. Ele gera relatório e não aplica correções permanentes.
 
-### 6.5. Modos de execução
+### 7.5. Modos de execução
 
 | Modo | O que faz | Indicação |
 |---|---|---|
@@ -364,7 +426,7 @@ Esse modo é o mais seguro para começar. Ele gera relatório e não aplica corr
 | `Relatorio` | Regera relatório usando execução anterior | Quando quiser recriar HTML |
 | `Rollback` | Reativa entradas de inicialização desabilitadas pelo HD100 | Quando uma desativação de teste precisar ser revertida |
 
-### 6.6. Exemplos de uso
+### 7.6. Exemplos de uso
 
 Diagnóstico seguro:
 
@@ -396,7 +458,7 @@ Rollback de inicialização:
 .\maintenance\Diagnostico-Reparo-HD100.ps1 -Modo Rollback
 ```
 
-### 6.7. O que ele coleta
+### 7.7. O que ele coleta
 
 O diagnóstico coleta:
 
@@ -423,7 +485,7 @@ O diagnóstico coleta:
 - Adobe Reader;
 - drivers/controladores de armazenamento.
 
-### 6.8. Relatórios gerados
+### 7.8. Relatórios gerados
 
 Por padrão, os arquivos ficam em:
 
@@ -444,7 +506,7 @@ Arquivos principais:
 | `logs\dism.log` | Saída do DISM diagnóstico |
 | `logs\eventos-disco.log` | Eventos relevantes de disco |
 
-### 6.9. Como interpretar o relatório
+### 7.9. Como interpretar o relatório
 
 Leia primeiro a seção `RESUMO`.
 
@@ -462,7 +524,7 @@ Pontos importantes:
 | `Inicialização ativa/inativa` | Quantidade de itens que iniciam com o Windows |
 | `Tempo do último boot` | Tempo que o Windows registrou no último boot |
 
-### 6.10. Programas na inicialização
+### 7.10. Programas na inicialização
 
 O HD100 lista programas que iniciam com o Windows. No HTML eles aparecem com estado:
 
@@ -489,7 +551,7 @@ Recomendação operacional:
 > Desabilite uma entrada por vez, reinicie o computador e observe se o problema melhorou. Não remova definitivamente
 > sem autorização ou sem saber a função do programa.
 
-### 6.11. Ações sensíveis
+### 7.11. Ações sensíveis
 
 Algumas ações exigem cuidado:
 
@@ -500,15 +562,186 @@ Algumas ações exigem cuidado:
 | `DISM RestoreHealth` | Pode reparar imagem do Windows | Use em modo assistido |
 | Remover inicialização | Pode impedir software necessário de iniciar | Prefira desabilitar antes |
 
-## 7. Script `limpeza-windows.ps1`
+## 8. Script `Inventario-Hardware-Software.ps1`
 
-### 7.1. Finalidade
+### 8.1. Finalidade
+
+O script `Inventario-Hardware-Software.ps1` gera inventário técnico do computador. Ele pode criar o inventário
+completo em HTML/PDF e também um resumo enxuto de hardware e drivers ativos.
+
+### 8.2. Quando usar
+
+Use quando precisar:
+
+- documentar hardware e software instalado;
+- comparar drivers antes e depois de uma intervenção;
+- registrar versão de driver de vídeo, rede, áudio ou armazenamento;
+- coletar evidência em casos de tela preta, DWM, travamento gráfico ou congelamento;
+- fazer inventário rápido em campo.
+
+### 8.3. Exemplos de uso
+
+Inventário completo:
+
+```powershell
+.\inventory\Inventario-Hardware-Software.ps1
+```
+
+Inventário completo sem PDF:
+
+```powershell
+.\inventory\Inventario-Hardware-Software.ps1 -NaoPDF
+```
+
+Inventário completo e resumo de hardware/drivers:
+
+```powershell
+.\inventory\Inventario-Hardware-Software.ps1 -GerarResumoHardwareDrivers
+```
+
+Somente resumo rápido:
+
+```powershell
+.\inventory\Inventario-Hardware-Software.ps1 -SomenteHardwareDrivers
+```
+
+Somente Markdown:
+
+```powershell
+.\inventory\Inventario-Hardware-Software.ps1 -SomenteHardwareDrivers -FormatoResumoHardwareDrivers Markdown
+```
+
+### 8.4. Relatórios gerados
+
+Por padrão, os arquivos ficam em:
+
+```text
+C:\WBA\Relatorios\Inventory\<timestamp>\
+```
+
+Arquivos principais:
+
+| Arquivo | Uso |
+|---|---|
+| `Inventario_*.html` | Inventário completo para navegador |
+| `Inventario_*.pdf` | PDF opcional, quando houver navegador compatível |
+| `resumo-hardware-drivers.txt` | Resumo legível em texto |
+| `resumo-hardware-drivers.md` | Resumo para chamado, issue ou documentação |
+| `resumo-hardware-drivers.json` | Dados estruturados para comparação automatizada |
+| `logs\inventario-*.log` | Log da execução |
+
+## 9. Script `Diagnostico-Driver-Grafico.ps1`
+
+### 9.1. Finalidade
+
+O script `Diagnostico-Driver-Grafico.ps1` coleta evidências para problemas de vídeo, tela preta, travamento gráfico,
+falhas de DWM, TDR, WHEA, Kernel-Power e instabilidade relacionada a driver de GPU.
+
+### 9.2. Quando usar
+
+Use quando o computador apresentar:
+
+- tela preta intermitente;
+- congelamento ao abrir navegador, vídeo, Teams ou sistema gráfico;
+- reinicialização após uso de GPU;
+- erros de driver de vídeo no Visualizador de Eventos;
+- suspeita de versão incorreta, antiga ou instável de driver gráfico.
+
+### 9.3. Exemplos de uso
+
+Diagnóstico seguro:
+
+```powershell
+.\diagnostics\Diagnostico-Driver-Grafico.ps1
+```
+
+Diagnóstico com HTML:
+
+```powershell
+.\diagnostics\Diagnostico-Driver-Grafico.ps1 -GerarHtml
+```
+
+Coleta assistida com HTML, DXDiag e EVTX:
+
+```powershell
+.\diagnostics\Diagnostico-Driver-Grafico.ps1 -Modo Assistido
+```
+
+### 9.4. Relatórios gerados
+
+Por padrão, os arquivos ficam em:
+
+```text
+C:\WBA\Relatorios\Diagnostics\<timestamp>\
+```
+
+Arquivos principais:
+
+| Arquivo | Uso |
+|---|---|
+| `relatorio-driver-grafico.txt` | Relatório legível em texto |
+| `relatorio-driver-grafico.html` | Relatório visual, quando `-GerarHtml` for usado |
+| `diagnostico-driver-grafico.json` | Dados estruturados |
+| `logs\dxdiag.txt` | Saída opcional do DXDiag |
+| `logs\System.evtx` | Exportação opcional do log System |
+| `logs\Application.evtx` | Exportação opcional do log Application |
+
+## 10. Script `Testar-conectividade-internet.ps1`
+
+### 10.1. Finalidade
+
+O script `Testar-conectividade-internet.ps1` executa um diagnóstico sequencial de conectividade com a internet. Ele
+usa o módulo `WbaToolkit.Networking` para verificar rede local, gateway, DNS, ICMP e TCP.
+
+### 10.2. Quando usar
+
+Use quando houver:
+
+- computador sem internet;
+- DNS com comportamento instável;
+- gateway inacessível;
+- suspeita de bloqueio em firewall;
+- necessidade de testar um destino, protocolo e portas específicas.
+
+### 10.3. Diagnóstico geral de internet
+
+```powershell
+.\diagnostics\Testar-conectividade-internet.ps1
+```
+
+Com detalhes:
+
+```powershell
+.\diagnostics\Testar-conectividade-internet.ps1 -Detalhado
+```
+
+### 10.4. Teste direcionado por alvo
+
+Para testar um IP, nome DNS, protocolo e portas específicas, importe o módulo de rede:
+
+```powershell
+Import-Module .\modules\WbaToolkit.Networking\WbaToolkit.Networking.psd1 -Force
+Invoke-TargetConnectivityWizard
+```
+
+O wizard aceita `TCP`, `UDP`, `ICMP`, `Todos` ou lista separada por vírgula, como `TCP,UDP`.
+
+Exemplo direto:
+
+```powershell
+$report = Invoke-TargetConnectivityTest -TargetAddress 192.168.5.10 -Protocol TCP -PortSpec '80,443,3389'
+Show-ConnectivityReport -Report $report
+```
+
+## 11. Script `limpeza-windows.ps1`
+
+### 11.1. Finalidade
 
 O script `limpeza-windows.ps1` faz limpeza segura e manutenção conservadora do Windows.
 
 Ele remove arquivos temporários, limpa caches, pode executar SFC/DISM, verificar eventos de disco e liberar espaço.
 
-### 7.2. Quando usar
+### 11.2. Quando usar
 
 Use quando:
 
@@ -519,7 +752,7 @@ Use quando:
 - precisar rodar SFC/DISM;
 - precisar executar manutenção preventiva.
 
-### 7.3. O que ele não remove
+### 11.3. O que ele não remove
 
 O script não remove:
 
@@ -531,7 +764,7 @@ O script não remove:
 - documentos dos usuários;
 - limpeza agressiva de registro.
 
-### 7.4. Execução recomendada
+### 11.4. Execução recomendada
 
 ```powershell
 Set-Location C:\ti\wba-windows-toolkit
@@ -540,7 +773,7 @@ Set-Location C:\ti\wba-windows-toolkit
 
 O parâmetro `-NoReboot` evita reinicialização automática.
 
-### 7.5. Principais parâmetros
+### 11.5. Principais parâmetros
 
 | Parâmetro | O que faz | Quando usar |
 |---|---|---|
@@ -559,7 +792,7 @@ O parâmetro `-NoReboot` evita reinicialização automática.
 | `-ChkdskAction` | `Schedule` ou `Skip` | Define se agenda CHKDSK |
 | `-EventLogCleanup` | `All`, `ErrorOnly` ou `None` | Define limpeza do Visualizador de Eventos |
 
-### 7.6. Exemplos seguros
+### 11.6. Exemplos seguros
 
 Limpeza sem reiniciar:
 
@@ -585,7 +818,7 @@ Automação conservadora:
 .\maintenance\limpeza-windows.ps1 -ChkdskAction Skip -EventLogCleanup None -NoReboot
 ```
 
-### 7.7. Onde fica o log
+### 11.7. Onde fica o log
 
 O script cria log em:
 
@@ -599,7 +832,7 @@ O nome costuma seguir o formato:
 yyyy-MM-dd_HHmmss-limpeza-windows.log
 ```
 
-### 7.8. Cuidados operacionais
+### 11.8. Cuidados operacionais
 
 - Use `-NoReboot` se o usuário estiver trabalhando.
 - Não use `-EventLogCleanup All` sem autorização.
@@ -607,9 +840,9 @@ yyyy-MM-dd_HHmmss-limpeza-windows.log
 - Não use `-DisableHibernation` se o usuário depende de hibernação.
 - Antes de `ChkdskAction Schedule`, avise que pode haver verificação no próximo boot.
 
-## 8. Script `upgrade-windows.ps1`
+## 12. Script `upgrade-windows.ps1`
 
-### 8.1. Finalidade
+### 12.1. Finalidade
 
 O script `upgrade-windows.ps1` aciona uma rotina simples e conservadora de atualização.
 
@@ -621,7 +854,7 @@ Ele tenta:
 
 Ele não instala Chocolatey, não instala WinGet e não força reinicialização.
 
-### 8.2. Quando usar
+### 12.2. Quando usar
 
 Use quando:
 
@@ -629,7 +862,7 @@ Use quando:
 - precisar atualizar pacotes gerenciados pelo Chocolatey;
 - precisar executar uma rotina básica de atualização sem módulos adicionais.
 
-### 8.3. Execução recomendada
+### 12.3. Execução recomendada
 
 ```powershell
 Set-Location C:\ti\wba-windows-toolkit
@@ -638,7 +871,7 @@ Set-Location C:\ti\wba-windows-toolkit
 
 O parâmetro `-PauseAtEnd` mantém a janela aberta no final, útil para copiar mensagens e conferir o resultado.
 
-### 8.4. Principais parâmetros
+### 12.4. Principais parâmetros
 
 | Parâmetro | O que faz |
 |---|---|
@@ -649,7 +882,7 @@ O parâmetro `-PauseAtEnd` mantém a janela aberta no final, útil para copiar m
 | `-NoRebootWarning` | Não exibe aviso de reinicialização |
 | `-PauseAtEnd` | Aguarda ENTER antes de fechar |
 
-### 8.5. Exemplos
+### 12.5. Exemplos
 
 Executar atualização completa:
 
@@ -675,7 +908,7 @@ Manter janela aberta:
 .\updates\upgrade-windows.ps1 -PauseAtEnd
 ```
 
-### 8.6. Onde fica o log
+### 12.6. Onde fica o log
 
 O log fica em:
 
@@ -689,7 +922,7 @@ Nome esperado:
 yyyy-MM-dd_HHmmss-upgrade-windows.log
 ```
 
-### 8.7. Como acompanhar o Windows Update
+### 12.7. Como acompanhar o Windows Update
 
 O `UsoClient.exe` normalmente não mostra progresso detalhado no console.
 
@@ -705,16 +938,16 @@ Em Windows 11:
 Configurações > Windows Update
 ```
 
-### 8.8. Cuidados
+### 12.8. Cuidados
 
 - Atualizações podem exigir reinicialização.
 - Chocolatey depende da internet e do repositório configurado.
 - Se Chocolatey falhar por timeout, tente novamente mais tarde.
 - Não desligue o computador durante instalação de atualização.
 
-## 9. Fluxo de atendimento recomendado
+## 13. Fluxo de atendimento recomendado
 
-### 9.1. Quando o problema é disco 100%
+### 13.1. Quando o problema é disco 100%
 
 1. Abrir PowerShell como Administrador.
 2. Entrar na pasta do toolkit.
@@ -735,7 +968,7 @@ Configurações > Windows Update
 7. Desabilitar apenas uma entrada de inicialização por vez.
 8. Reiniciar e testar.
 
-### 9.2. Quando o problema é pouco espaço em disco
+### 13.2. Quando o problema é pouco espaço em disco
 
 1. Executar:
 
@@ -746,7 +979,7 @@ Configurações > Windows Update
 2. Verificar o log em `C:\WBA\Relatorios\Maintenance\<timestamp>\logs`.
 3. Confirmar espaço livre depois da execução.
 
-### 9.3. Quando o problema é sistema desatualizado
+### 13.3. Quando o problema é sistema desatualizado
 
 1. Executar:
 
@@ -757,7 +990,30 @@ Configurações > Windows Update
 2. Conferir Windows Update nas Configurações.
 3. Reiniciar se o Windows solicitar.
 
-### 9.4. Quando precisa de manual local
+### 13.4. Quando o problema é tela preta ou travamento gráfico
+
+1. Executar:
+
+```powershell
+.\diagnostics\Diagnostico-Driver-Grafico.ps1 -Modo Assistido
+```
+
+2. Abrir o HTML gerado.
+3. Verificar:
+   - GPU detectada;
+   - versão e data do driver;
+   - eventos `Display`, `DWM`, `DirectX`, `WHEA`, `BugCheck` e `Kernel-Power`;
+   - processos com aceleração gráfica;
+   - plano de energia e inicialização rápida.
+4. Se for trocar driver, gerar também:
+
+```powershell
+.\inventory\Inventario-Hardware-Software.ps1 -SomenteHardwareDrivers
+```
+
+5. Depois da intervenção, executar o resumo novamente e comparar a versão do driver.
+
+### 13.5. Quando precisa de manual local
 
 1. Importar módulo:
 
@@ -777,7 +1033,7 @@ Export-ToolkitFunctionDocs -OutputPath .\docs-html -Force
 Start-Process .\docs-html\index.html
 ```
 
-## 10. Mensagens comuns e o que fazer
+## 14. Mensagens comuns e o que fazer
 
 | Mensagem ou situação | O que significa | O que fazer |
 |---|---|---|
@@ -789,7 +1045,7 @@ Start-Process .\docs-html\index.html
 | CHKDSK informa agendamento | Verificação será no próximo boot | Avisar usuário antes de reiniciar |
 | Relatório HTML não abre | Caminho incorreto | Abrir o arquivo `index.html` ou `relatorio-hd100.html` correto |
 
-## 11. Regras de segurança para operador
+## 15. Regras de segurança para operador
 
 1. Comece sempre pelo modo diagnóstico.
 2. Leia o resumo antes de executar correções.
@@ -802,7 +1058,7 @@ Start-Process .\docs-html\index.html
 9. Guarde o caminho do relatório e do log.
 10. Em dúvida, pare e escale para um técnico mais experiente.
 
-## 12. Checklist rápido
+## 16. Checklist rápido
 
 Antes de executar:
 

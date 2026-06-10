@@ -20,6 +20,9 @@ As especificações formais do projeto ficam em um repositório separado, sob o 
 - Suporte completo a UTF-8
 - Ajuda integrada via parâmetros
 - Logs automáticos de execução
+- Relatórios padronizados por módulo em `C:\WBA\Relatorios` ou raiz configurada
+- Geração de relatórios HTML autocontidos
+- Manual HTML local gerado a partir dos comentários dos scripts e funções
 - Autoelevação administrativa
 - Tratamento de erros
 - Estrutura padronizada
@@ -59,7 +62,18 @@ As especificações formais do projeto ficam em um repositório separado, sob o 
 
 - Coleta de informações do sistema
 - Verificação de espaço em disco
+- Diagnóstico assistido de disco 100% (`HD100`)
+- Diagnóstico de driver gráfico, tela preta, DWM, TDR e eventos relacionados
+- Teste de conectividade com internet
+- Teste direcionado de IP/nome, protocolo e portas
 - Relatórios operacionais
+
+### Inventário
+
+- Inventário completo de hardware e software em HTML
+- PDF opcional quando houver navegador compatível
+- Resumo enxuto de hardware e drivers ativos em TXT, Markdown e JSON
+- Dados úteis para comparar versões de drivers antes/depois de intervenção
 
 ## Padrões Utilizados
 
@@ -77,6 +91,26 @@ $PSDefaultParameterValues['Set-Content:Encoding'] = 'utf8'
 $PSDefaultParameterValues['Add-Content:Encoding'] = 'utf8'
 
 chcp 65001 | Out-Null
+```
+
+### Relatórios
+
+Por padrão, os relatórios são criados em:
+
+```text
+C:\WBA\Relatorios\<Modulo>\<timestamp>\
+```
+
+Quando o operador informar um diretório por parâmetro, esse caminho tem prioridade para a execução atual. Quando uma
+raiz global estiver configurada com `Set-ToolkitReportsRoot`, os scripts devem usar essa raiz antes do padrão
+`C:\WBA\Relatorios`.
+
+Exemplo:
+
+```powershell
+Import-Module .\modules\WbaToolkit.Core\WbaToolkit.Core.psd1 -Force
+Set-ToolkitReportsRoot -Path "D:\Relatorios\WBA"
+Get-ToolkitReportsRoot
 ```
 
 ### Identificação do Script
