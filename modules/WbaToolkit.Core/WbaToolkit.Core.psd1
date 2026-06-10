@@ -18,7 +18,8 @@
         'Write-Section',
         'Read-YesNo',
         'Invoke-ExternalCommand',
-        'ConvertTo-HtmlSafe'
+        'ConvertTo-HtmlSafe',
+        'Export-ToolkitFunctionDocs'
     )
     CmdletsToExport   = @()
     VariablesToExport = @()

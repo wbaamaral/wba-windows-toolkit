@@ -57,6 +57,10 @@ Describe 'WbaToolkit.Core' {
         It 'Deve exportar ConvertTo-HtmlSafe' {
             (Get-Command ConvertTo-HtmlSafe -ErrorAction Stop).CommandType | Should -Be 'Function'
         }
+
+        It 'Deve exportar Export-ToolkitFunctionDocs' {
+            (Get-Command Export-ToolkitFunctionDocs -ErrorAction Stop).CommandType | Should -Be 'Function'
+        }
     }
 
     Context 'Formatacao de tamanho' {
@@ -100,6 +104,27 @@ Describe 'WbaToolkit.Core' {
     Context 'Elevacao' {
         It 'Deve retornar valor booleano' {
             Test-IsAdministrator | Should -BeOfType [bool]
+        }
+    }
+
+    Context 'Documentacao estatica' {
+        It 'Deve gerar indice HTML local' {
+            $repoRoot = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
+            $outputPath = Join-Path ([System.IO.Path]::GetTempPath()) ('wba-docs-' + [guid]::NewGuid().ToString())
+            $modulePath = Join-Path $repoRoot 'modules/WbaToolkit.Core/WbaToolkit.Core.psd1'
+
+            $result = Export-ToolkitFunctionDocs -ModulePath $modulePath -OutputPath $outputPath -Force
+
+            Test-Path -LiteralPath $result.Path | Should -BeTrue
+            Test-Path -LiteralPath (Join-Path $outputPath 'functions/Export-ToolkitFunctionDocs.html') | Should -BeTrue
+
+            $content = Get-Content -LiteralPath $result.Path -Raw
+            $content | Should -Match 'Manual de Funcoes'
+            $content | Should -Match 'Export-ToolkitFunctionDocs'
+
+            $functionContent = Get-Content -LiteralPath (Join-Path $outputPath 'functions/Export-ToolkitFunctionDocs.html') -Raw
+            $functionContent | Should -Match 'Metadados do manual'
+            $functionContent | Should -Match 'Documentacao'
         }
     }
 }

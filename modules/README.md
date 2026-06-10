@@ -24,3 +24,5 @@ Regras:
 - Funcoes internas ficam em `Private/`.
 - O `.psm1` carrega as funcoes e exporta apenas as publicas.
 - Funcoes publicas devem ter `Comment-Based Help`.
+- Funcoes publicas podem declarar metadados do manual HTML com uma linha interna no formato
+  `# WBA-DOCS: Category=Networking; Related=Show-ConnectivityReport; Manual=Descricao curta`.
