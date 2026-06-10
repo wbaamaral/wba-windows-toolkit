@@ -22,7 +22,7 @@ Scripts de configuração e padronização de instalações Windows. Aplicam con
 | Localização geográfica | Define Brasil como localização (GeoID 32) |
 | Propagação | Copia todas as configurações para a conta do sistema e perfil padrão de novos usuários via `intl.cpl` com XML de propagação |
 | Fuso horário | Define o fuso via `Set-TimeZone` (padrão UTC-4, parametrizável) |
-| Log | Salva transcrição completa em `C:\ti` |
+| Log | Salva transcrição completa em `C:\WBA\Relatorios\Configuration\<timestamp>\logs` ou em raiz definida por `-DiretorioSaida` |
 
 **Parâmetros:**
 
@@ -34,6 +34,7 @@ Scripts de configuração e padronização de instalações Windows. Aplicam con
 | `-ListTimeZones` | — | Lista os fusos horários do Brasil e encerra |
 | `-Help` | — | Exibe ajuda completa |
 | `-Version` | — | Exibe versão do script |
+| `-DiretorioSaida` | `ReportsRoot` ou `C:\WBA\Relatorios` | Raiz de relatórios; o script cria `Configuration\<timestamp>\logs` |
 
 **Fusos horários brasileiros disponíveis** (use o valor exato em `-TimeZone`):
 
@@ -66,4 +67,4 @@ Scripts de configuração e padronização de instalações Windows. Aplicam con
 
 **Requisitos:** Administrador local. Windows 10 Pro 21H2+ ou Windows 11 Pro. PowerShell 5.1+. Acesso à internet para download do pacote de idioma quando ausente.
 
-**Log:** `C:\ti\<timestamp>-Configurar-Idioma-Regional.log`
+**Log:** `C:\WBA\Relatorios\Configuration\<timestamp>\logs\<timestamp>-Configurar-Idioma-Regional.log` ou `<DiretorioSaida>\Configuration\<timestamp>\logs\...`

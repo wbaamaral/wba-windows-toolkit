@@ -13,13 +13,16 @@
     Nome do DC preferencial. Se omitido, usa o DC logado atualmente.
 .PARAMETER SkipReparo
     Nao oferece opcoes de reparo; executa somente leitura.
+.PARAMETER DiretorioSaida
+    Raiz de relatorios. Se omitido, usa ReportsRoot persistente ou C:\WBA\Relatorios.
 #>
 
 [CmdletBinding()]
 param(
     [string]$DomainFQDN  = '',
     [string]$DCName      = '',
-    [switch]$SkipReparo
+    [switch]$SkipReparo,
+    [string]$DiretorioSaida
 )
 
 Set-StrictMode -Version 2.0
@@ -68,10 +71,11 @@ function Add-Result {
 # ---------------------------------------------------------------------------
 # Preparacao
 # ---------------------------------------------------------------------------
-$Timestamp  = Get-Date -Format 'yyyyMMdd-HHmmss'
-$LogDir     = 'C:\Temp'
+$Timestamp  = Get-Date -Format 'yyyy-MM-dd_HHmmss'
+$ReportSession = Initialize-ToolkitReportSession -ReportsRoot $DiretorioSaida -ModuleName 'ActiveDirectory' -ExecutionName $Timestamp
+$LogDir     = $ReportSession.LogsPath
 $LogFile    = Join-Path $LogDir "DiagGPO-$Timestamp.log"
-$HtmlReport = Join-Path $LogDir "GPOResult-$Timestamp.html"
+$HtmlReport = Join-Path $ReportSession.Path "GPOResult-$Timestamp.html"
 
 if (-not (Test-Path $LogDir)) { New-Item -ItemType Directory -Path $LogDir | Out-Null }
 

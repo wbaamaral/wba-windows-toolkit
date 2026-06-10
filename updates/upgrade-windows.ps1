@@ -7,7 +7,9 @@ param (
     [switch]$NoWindowsUpdate,
     [switch]$NoChocolatey,
     [switch]$NoRebootWarning,
-    [switch]$PauseAtEnd
+    [switch]$PauseAtEnd,
+
+    [string]$DiretorioSaida
 )
 
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
@@ -50,7 +52,7 @@ Import-Module $ToolkitModulePath -Force -ErrorAction Stop
     - Identifica automaticamente o nome real do script chamado.
     - Exibe ajuda com exemplos usando o nome real do arquivo.
     - Solicita elevação administrativa automaticamente, quando necessário.
-    - Cria log de execução em C:\ti.
+    - Cria log de execução na pasta padronizada de relatorios do toolkit.
     - Inicia varredura nativa do Windows Update.
     - Atualiza pacotes via Chocolatey, quando disponível.
     - Não depende do módulo PSWindowsUpdate.
@@ -115,8 +117,9 @@ Import-Module $ToolkitModulePath -Force -ErrorAction Stop
 $ScriptVersion = "v1.0-update-basico"
 $ErrorActionPreference = "Continue"
 
-$LogDir = "C:\ti"
-$LogFile = Join-Path $LogDir "$((Get-Date).ToString('yyyy-MM-dd_HH-mm-ss'))-upgrade-windows.log"
+$ReportSession = Initialize-ToolkitReportSession -ReportsRoot $DiretorioSaida -ModuleName 'Updates'
+$LogDir = $ReportSession.LogsPath
+$LogFile = Join-Path $LogDir "$((Get-Date).ToString('yyyy-MM-dd_HHmmss'))-upgrade-windows.log"
 
 $ScriptName = if ($MyInvocation.MyCommand.Name) {
     $MyInvocation.MyCommand.Name
@@ -148,6 +151,7 @@ function Show-Help {
     Write-Host "  -NoChocolatey      Não atualiza pacotes via Chocolatey"
     Write-Host "  -NoRebootWarning   Não exibe aviso de reinicialização"
     Write-Host "  -PauseAtEnd        Aguarda uma tecla antes de finalizar"
+    Write-Host "  -DiretorioSaida    Raiz de relatorios. Padrao: configuracao global ou C:\WBA\Relatorios"
     Write-Host ""
     Write-Host "Exemplos:" -ForegroundColor Yellow
     Write-Host "  Set-ExecutionPolicy Bypass -Scope Process -Force"
@@ -234,7 +238,16 @@ if ($Version) {
 }
 
 if (-not (Test-IsAdministrator)) {
-    Start-Process powershell.exe -ArgumentList "-NoProfile -ExecutionPolicy Bypass -File `"$ScriptPath`" $args" -Verb RunAs
+    $relaunchArgs = foreach ($kv in $PSBoundParameters.GetEnumerator()) {
+        if ($kv.Value -is [switch]) {
+            if ($kv.Value.IsPresent) { "-$($kv.Key)" }
+        }
+        else {
+            "-$($kv.Key)"; "$($kv.Value)"
+        }
+    }
+    $allArgs = @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', "`"$ScriptPath`"") + $relaunchArgs
+    Start-Process powershell.exe -ArgumentList $allArgs -Verb RunAs
     exit
 }
 

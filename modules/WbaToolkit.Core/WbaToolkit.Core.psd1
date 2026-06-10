@@ -19,6 +19,10 @@
         'Read-YesNo',
         'Invoke-ExternalCommand',
         'ConvertTo-HtmlSafe',
+        'Get-ToolkitConfiguration',
+        'Set-ToolkitReportsRoot',
+        'Get-ToolkitReportsRoot',
+        'Initialize-ToolkitReportSession',
         'Export-ToolkitFunctionDocs'
     )
     CmdletsToExport   = @()

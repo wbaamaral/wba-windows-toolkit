@@ -52,7 +52,7 @@ Scripts utilitários de uso geral para administração do dia a dia. Ferramentas
 
 **Requisitos:** Administrador local. Windows 10+. PowerShell 5.1+.
 
-**Log:** `C:\ti\<timestamp>-Remover-Perfis-Inativos.log`
+**Log:** `C:\WBA\Relatorios\Utilities\<timestamp>\logs\<timestamp>-Remover-Perfis-Inativos.log` ou `<DiretorioSaida>\Utilities\<timestamp>\logs\...`
 
 ---
 
@@ -80,7 +80,7 @@ Scripts utilitários de uso geral para administração do dia a dia. Ferramentas
 | Parâmetro | Padrão | Descrição |
 |---|---|---|
 | `-Drive` | todos os fixos | Letra(s) do volume a varrer (ex: `C`, `C,D`) |
-| `-OutputDir` | `C:\ti` | Diretório de saída do relatório HTML/PDF |
+| `-OutputDir` | `ReportsRoot` ou `C:\WBA\Relatorios` | Raiz de relatórios; o script cria `Utilities\<timestamp>` |
 | `-NaoPDF` | — | Gera apenas HTML, sem conversão para PDF |
 | `-Silent` | — | Sem progresso no console durante a varredura |
 
@@ -102,9 +102,9 @@ Scripts utilitários de uso geral para administração do dia a dia. Ferramentas
 
 **Requisitos:** Administrador local (para acessar pastas protegidas do sistema). Windows 10+. PowerShell 5.1+.
 
-**Saída:** `C:\ti\<timestamp>-Analise-Espaco-Disco.html` e `.pdf`
+**Saída:** `C:\WBA\Relatorios\Utilities\<timestamp>\` ou `<OutputDir>\Utilities\<timestamp>\`
 
-**Log:** `C:\ti\<timestamp>-Analise-Espaco-Disco.log`
+**Log:** `C:\WBA\Relatorios\Utilities\<timestamp>\logs\<timestamp>-Analise-Espaco-Disco.log`
 
 ---
 

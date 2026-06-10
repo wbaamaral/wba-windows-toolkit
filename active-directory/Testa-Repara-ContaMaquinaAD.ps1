@@ -39,7 +39,10 @@ param(
     [string[]]$DnsServers,
 
     [Parameter(Mandatory = $false)]
-    [switch]$NoTranscript
+    [switch]$NoTranscript,
+
+    [Parameter(Mandatory = $false)]
+    [string]$DiretorioSaida
 )
 
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
@@ -137,12 +140,13 @@ function Initialize-Log {
         return
     }
 
-    $logDir = 'C:\Temp'
+    $session = Initialize-ToolkitReportSession -ReportsRoot $DiretorioSaida -ModuleName 'ActiveDirectory'
+    $logDir = $session.LogsPath
     if (-not (Test-Path $logDir)) {
         New-Item -Path $logDir -ItemType Directory -Force | Out-Null
     }
 
-    $logFile = Join-Path $logDir ("AD-MachineAccount-Repair-{0}.log" -f (Get-Date -Format 'yyyyMMdd-HHmmss'))
+    $logFile = Join-Path $logDir ("AD-MachineAccount-Repair-{0}.log" -f (Get-Date -Format 'yyyy-MM-dd_HHmmss'))
 
     try {
         Start-Transcript -Path $logFile -Force | Out-Null

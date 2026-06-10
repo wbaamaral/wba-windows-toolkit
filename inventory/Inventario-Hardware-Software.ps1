@@ -33,15 +33,14 @@
         Se nenhum for encontrado, o script gera apenas o HTML e instrui o
         usuario a usar Ctrl+P > Salvar como PDF no navegador.
 
-    Arquivos gerados em -OutputDir:
-      Inventario-<COMPUTERNAME>-<YYYYMMDD-HHmmss>.html  Relatorio principal
-      Inventario-<COMPUTERNAME>-<YYYYMMDD-HHmmss>.pdf   Versao em PDF (se disponivel)
-      Inventario-<YYYYMMDD-HHmmss>.log                  Transcript de execucao
+    Arquivos gerados na sessao padronizada de relatorio:
+      relatorio-inventario-<COMPUTERNAME>-<yyyy-MM-dd_HHmmss>.html  Relatorio principal
+      relatorio-inventario-<COMPUTERNAME>-<yyyy-MM-dd_HHmmss>.pdf   Versao em PDF (se disponivel)
+      logs\inventario-<yyyy-MM-dd_HHmmss>.log                      Transcript de execucao
 
 .PARAMETER OutputDir
-    Caminho da pasta onde os arquivos HTML, PDF e log serao salvos.
-    A pasta e criada automaticamente caso nao exista.
-    Padrao: C:\TI
+    Raiz de relatorios escolhida pelo usuario. Quando omitido, usa ReportsRoot persistente do toolkit ou
+    C:\WBA\Relatorios. O script cria automaticamente Inventory\<timestamp>.
 
     Exemplos de valores validos:
       C:\TI
@@ -58,7 +57,7 @@
 .EXAMPLE
     .\Inventario-Hardware-Software.ps1
 
-    Execucao padrao. Gera HTML e PDF em C:\TI com deteccao automatica
+    Execucao padrao. Gera HTML e PDF na pasta padronizada de relatorios com deteccao automatica
     de Chrome ou Edge para a conversao.
 
 .EXAMPLE
@@ -70,7 +69,7 @@
 .EXAMPLE
     .\Inventario-Hardware-Software.ps1 -NaoPDF
 
-    Gera apenas o HTML em C:\TI, sem tentativa de conversao para PDF.
+    Gera apenas o HTML na pasta padronizada de relatorios, sem tentativa de conversao para PDF.
 
 .EXAMPLE
     .\Inventario-Hardware-Software.ps1 -OutputDir "\\srv-files\TI\Inventarios" -NaoPDF
@@ -95,7 +94,7 @@
 
 [CmdletBinding()]
 param(
-    [string]$OutputDir = 'C:\TI',
+    [string]$OutputDir,
     [switch]$NaoPDF
 )
 
@@ -148,15 +147,16 @@ function New-KvRow {
 # ---------------------------------------------------------------------------
 # Preparacao de paths
 # ---------------------------------------------------------------------------
-$Timestamp = Get-Date -Format 'yyyyMMdd-HHmmss'
+$Timestamp = Get-Date -Format 'yyyy-MM-dd_HHmmss'
 $DataHora  = Get-Date -Format 'dd/MM/yyyy HH:mm:ss'
 $DataCurta = Get-Date -Format 'dd/MM/yyyy'
 
-if (-not (Test-Path $OutputDir)) { New-Item -ItemType Directory -Path $OutputDir -Force | Out-Null }
+$ReportSession = Initialize-ToolkitReportSession -ReportsRoot $OutputDir -ModuleName 'Inventory' -ExecutionName $Timestamp
+$OutputDir = $ReportSession.Path
 
-$HtmlFile = Join-Path $OutputDir "Inventario-$env:COMPUTERNAME-$Timestamp.html"
-$PdfFile  = Join-Path $OutputDir "Inventario-$env:COMPUTERNAME-$Timestamp.pdf"
-$LogFile  = Join-Path $OutputDir "Inventario-$Timestamp.log"
+$HtmlFile = Join-Path $OutputDir "relatorio-inventario-$env:COMPUTERNAME-$Timestamp.html"
+$PdfFile  = Join-Path $OutputDir "relatorio-inventario-$env:COMPUTERNAME-$Timestamp.pdf"
+$LogFile  = Join-Path $ReportSession.LogsPath "inventario-$Timestamp.log"
 
 Start-Transcript -Path $LogFile -Force | Out-Null
 
@@ -167,6 +167,7 @@ Write-Title 'INVENTARIO DE HARDWARE E SOFTWARE'
 Write-Info  "Computador : $env:COMPUTERNAME"
 Write-Info  "Data/Hora  : $DataHora"
 Write-Info  "Destino    : $OutputDir"
+Write-Info  "Logs       : $($ReportSession.LogsPath)"
 
 Write-Info 'Coletando sistema operacional...'
 $os  = Get-CimInstance Win32_OperatingSystem -ErrorAction SilentlyContinue

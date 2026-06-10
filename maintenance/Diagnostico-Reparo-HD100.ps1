@@ -42,7 +42,8 @@
     Reservado para modo Assistido. Exige confirmacao antes de criar ponto de restauracao.
 
 .PARAMETER DiretorioSaida
-    Diretorio base onde as execucoes e relatorios serao gravados.
+    Raiz de relatorios escolhida pelo usuario. Quando omitido, usa ReportsRoot persistente do toolkit ou
+    C:\WBA\Relatorios.
 
 .USO
     Execucao diagnostica padrao:
@@ -78,7 +79,7 @@ param(
 
     [switch]$CriarPontoRestauracao,
 
-    [string]$DiretorioSaida = "$env:SystemDrive\WBA\Relatorios\HD100"
+    [string]$DiretorioSaida
 )
 
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
@@ -132,18 +133,16 @@ function Initialize-HD100Session {
         [string]$ExecutionMode
     )
 
-    $timestamp = Get-Date -Format 'yyyy-MM-dd_HHmmss'
-    $sessionPath = Join-Path $BasePath $timestamp
-    $logsPath = Join-Path $sessionPath 'logs'
-    $backupsPath = Join-Path $sessionPath 'backups'
-
-    New-Item -Path $logsPath -ItemType Directory -Force | Out-Null
-    New-Item -Path $backupsPath -ItemType Directory -Force | Out-Null
+    $reportSession = Initialize-ToolkitReportSession -ReportsRoot $BasePath -ModuleName 'HD100'
+    $sessionPath = $reportSession.Path
+    $logsPath = $reportSession.LogsPath
+    $backupsPath = $reportSession.BackupsPath
 
     $session = [pscustomobject]@{
         StartedAt = Get-Date
         Mode = $ExecutionMode
-        BasePath = $BasePath
+        ReportsRoot = $reportSession.ReportsRoot
+        BasePath = $reportSession.ModulePath
         Path = $sessionPath
         LogsPath = $logsPath
         BackupsPath = $backupsPath
@@ -1935,6 +1934,20 @@ function Export-HD100ReportHtml {
         '<li>{0}</li>' -f (ConvertTo-HtmlSafe -Value $_)
     }) -join "`r`n"
 
+    $generatedFileRows = @(
+        [pscustomobject]@{ Nome = 'Relatorio TXT'; Caminho = $script:HD100Session.TextReportPath }
+        [pscustomobject]@{ Nome = 'Relatorio HTML'; Caminho = $script:HD100Session.HtmlReportPath }
+        [pscustomobject]@{ Nome = 'Diagnostico JSON'; Caminho = $script:HD100Session.JsonPath }
+        [pscustomobject]@{ Nome = 'Registro de alteracoes'; Caminho = $script:HD100Session.ChangesPath }
+        [pscustomobject]@{ Nome = 'Rollback'; Caminho = $script:HD100Session.RollbackPath }
+        [pscustomobject]@{ Nome = 'Logs'; Caminho = $script:HD100Session.LogsPath }
+        [pscustomobject]@{ Nome = 'Backups'; Caminho = $script:HD100Session.BackupsPath }
+    ) | ForEach-Object {
+        '<tr class="border-b border-gray-200"><td class="py-2 px-3 font-medium">{0}</td><td class="py-2 px-3 text-xs text-gray-600 break-all">{1}</td></tr>' -f
+            (ConvertTo-HtmlSafe -Value $_.Nome),
+            (ConvertTo-HtmlSafe -Value $_.Caminho)
+    }
+
     $html = @"
 <!DOCTYPE html>
 <html lang="pt-BR">
@@ -1943,12 +1956,111 @@ function Export-HD100ReportHtml {
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Relatorio HD100</title>
-    <script src="https://cdn.tailwindcss.com"></script>
     <style>
         @page { size: A4; margin: 15mm; }
-        body { background-color: #f3f4f6; }
+        * { box-sizing: border-box; }
+        body {
+            margin: 0;
+            background-color: #f3f4f6;
+            color: #1f2937;
+            font-family: Arial, Helvetica, sans-serif;
+            line-height: 1.45;
+        }
+        button {
+            border: 0;
+            cursor: pointer;
+            font: inherit;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        th, td {
+            vertical-align: top;
+        }
+        .max-w-4xl { max-width: 56rem; }
+        .mx-auto { margin-left: auto; margin-right: auto; }
+        .mt-1 { margin-top: .25rem; }
+        .mt-2 { margin-top: .5rem; }
+        .mt-6 { margin-top: 1.5rem; }
+        .mt-10 { margin-top: 2.5rem; }
+        .mb-2 { margin-bottom: .5rem; }
+        .mb-3 { margin-bottom: .75rem; }
+        .mb-4 { margin-bottom: 1rem; }
+        .mb-6 { margin-bottom: 1.5rem; }
+        .mb-8 { margin-bottom: 2rem; }
+        .p-4 { padding: 1rem; }
+        .p-10 { padding: 2.5rem; }
+        .px-2 { padding-left: .5rem; padding-right: .5rem; }
+        .px-3 { padding-left: .75rem; padding-right: .75rem; }
+        .px-4 { padding-left: 1rem; padding-right: 1rem; }
+        .py-1 { padding-top: .25rem; padding-bottom: .25rem; }
+        .py-2 { padding-top: .5rem; padding-bottom: .5rem; }
+        .py-3 { padding-top: .75rem; padding-bottom: .75rem; }
+        .pt-4 { padding-top: 1rem; }
+        .pb-4 { padding-bottom: 1rem; }
+        .pl-6 { padding-left: 1.5rem; }
+        .flex { display: flex; }
+        .inline-block { display: inline-block; }
+        .justify-between { justify-content: space-between; }
+        .items-center { align-items: center; }
+        .items-end { align-items: flex-end; }
+        .w-full { width: 100%; }
+        .h-4 { height: 1rem; }
+        .min-w-12 { min-width: 3rem; }
+        .overflow-hidden { overflow: hidden; }
+        .break-all { word-break: break-all; }
+        .break-inside-avoid { break-inside: avoid; page-break-inside: avoid; }
+        .text-left { text-align: left; }
+        .text-center { text-align: center; }
+        .text-right { text-align: right; }
+        .text-xs { font-size: .75rem; }
+        .text-sm { font-size: .875rem; }
+        .text-xl { font-size: 1.25rem; }
+        .text-2xl { font-size: 1.5rem; }
+        .text-3xl { font-size: 1.875rem; }
+        .font-sans { font-family: Arial, Helvetica, sans-serif; }
+        .font-medium { font-weight: 500; }
+        .font-semibold { font-weight: 600; }
+        .font-bold { font-weight: 700; }
+        .uppercase { text-transform: uppercase; }
+        .text-white { color: #fff; }
+        .text-gray-500 { color: #6b7280; }
+        .text-gray-600 { color: #4b5563; }
+        .text-gray-700 { color: #374151; }
+        .text-gray-800 { color: #1f2937; }
+        .text-gray-900 { color: #111827; }
+        .text-green-700 { color: #15803d; }
+        .bg-white { background-color: #fff; }
+        .bg-blue-600 { background-color: #2563eb; }
+        .bg-gray-100 { background-color: #f3f4f6; }
+        .bg-gray-200 { background-color: #e5e7eb; }
+        .bg-green-100 { background-color: #dcfce7; }
+        .border { border: 1px solid #e5e7eb; }
+        .border-b { border-bottom: 1px solid #e5e7eb; }
+        .border-t { border-top: 1px solid #d1d5db; }
+        .border-b-2 { border-bottom: 2px solid #d1d5db; }
+        .border-gray-200 { border-color: #e5e7eb; }
+        .border-gray-300 { border-color: #d1d5db; }
+        .rounded { border-radius: .25rem; }
+        .shadow { box-shadow: 0 1px 3px rgba(0,0,0,.14); }
+        .shadow-lg { box-shadow: 0 10px 15px rgba(0,0,0,.12); }
+        .transition { transition: background-color .15s ease-in-out; }
+        .hover\:bg-blue-700:hover { background-color: #1d4ed8; }
+        .list-disc { list-style-type: disc; }
+        .list-decimal { list-style-type: decimal; }
+        .space-y-1 > * + * { margin-top: .25rem; }
         @media print {
-            body { background-color: white; }
+            body {
+                background-color: white;
+                color: #000;
+            }
+            .print\:hidden { display: none !important; }
+            .print\:shadow-none { box-shadow: none !important; }
+            .print\:m-0 { margin: 0 !important; }
+            .print\:p-0 { padding: 0 !important; }
+            .print\:max-w-full { max-width: none !important; }
+            .print\:text-black { color: #000 !important; }
             * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
         }
     </style>
@@ -2011,6 +2123,11 @@ function Export-HD100ReportHtml {
 
             <h2 class="text-xl font-bold mb-3">Recomendacoes</h2>
             <ol class="list-decimal pl-6 space-y-1">$recommendationRows</ol>
+
+            <h2 class="text-xl font-bold mt-10 mb-3">Arquivos gerados</h2>
+            <table class="w-full text-left border-collapse">
+                <tbody>$($generatedFileRows -join "`r`n")</tbody>
+            </table>
         </main>
 
         <footer class="mt-10 pt-4 border-t border-gray-300 text-center text-sm text-gray-500">
@@ -2054,13 +2171,16 @@ function Invoke-HD100Rollback {
 
 function Get-HD100LatestSessionPath {
     [CmdletBinding()]
-    param([Parameter(Mandatory = $true)][string]$BasePath)
+    param([Parameter(Mandatory = $false)][string]$BasePath)
 
-    if (-not (Test-Path -LiteralPath $BasePath)) {
+    $root = Get-ToolkitReportsRoot -Path $BasePath
+    $modulePath = Join-Path $root 'HD100'
+
+    if (-not (Test-Path -LiteralPath $modulePath)) {
         return $null
     }
 
-    return Get-ChildItem -LiteralPath $BasePath -Directory -ErrorAction SilentlyContinue |
+    return Get-ChildItem -LiteralPath $modulePath -Directory -ErrorAction SilentlyContinue |
         Sort-Object Name -Descending |
         Select-Object -First 1 -ExpandProperty FullName
 }
@@ -2082,7 +2202,8 @@ function Invoke-HD100ReportMode {
     $script:HD100Session = [pscustomobject]@{
         StartedAt = Get-Date
         Mode = 'Relatorio'
-        BasePath = $DiretorioSaida
+        ReportsRoot = (Get-ToolkitReportsRoot -Path $DiretorioSaida)
+        BasePath = (Split-Path -Parent $latest)
         Path = $latest
         LogsPath = Join-Path $latest 'logs'
         BackupsPath = Join-Path $latest 'backups'
