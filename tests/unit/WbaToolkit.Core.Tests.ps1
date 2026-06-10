@@ -119,14 +119,22 @@ Describe 'WbaToolkit.Core' {
             [System.IO.Path]::IsPathRooted($result.Path) | Should -BeTrue
             Test-Path -LiteralPath (Join-Path $outputPath 'functions/Export-ToolkitFunctionDocs.html') | Should -BeTrue
             Test-Path -LiteralPath (Join-Path $outputPath 'functions/Get-StaticDocsMetadata.html') | Should -BeFalse
+            Test-Path -LiteralPath (Join-Path $outputPath 'scripts/limpeza-windows.ps1.html') | Should -BeTrue
+            $result.ScriptCount | Should -BeGreaterThan 0
 
             $content = Get-Content -LiteralPath $result.Path -Raw
             $content | Should -Match 'Manual de Funcoes'
             $content | Should -Match 'Export-ToolkitFunctionDocs'
+            $content | Should -Match 'Indice de scripts'
+            $content | Should -Match 'limpeza-windows.ps1'
 
             $functionContent = Get-Content -LiteralPath (Join-Path $outputPath 'functions/Export-ToolkitFunctionDocs.html') -Raw
             $functionContent | Should -Match 'Metadados do manual'
             $functionContent | Should -Match 'Documentacao'
+
+            $scriptContent = Get-Content -LiteralPath (Join-Path $outputPath 'scripts/limpeza-windows.ps1.html') -Raw
+            $scriptContent | Should -Match 'Limpeza segura'
+            $scriptContent | Should -Match 'Como executar'
         }
 
         It 'Deve resolver caminho relativo de saida a partir da localizacao atual do PowerShell' {
