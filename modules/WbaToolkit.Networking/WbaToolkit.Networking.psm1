@@ -24,6 +24,8 @@ Export-ModuleMember -Function @(
     'New-ConnectivityTestPlan',
     'Invoke-ConnectivityTest',
     'Invoke-ConnectivityWizard',
+    'Invoke-TargetConnectivityTest',
+    'Invoke-TargetConnectivityWizard',
     'Show-ConnectivityReport',
     'Export-ConnectivityReport',
     'Export-ConnectivityReportPdf'
