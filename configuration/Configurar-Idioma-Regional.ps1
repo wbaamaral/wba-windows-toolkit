@@ -79,9 +79,9 @@ Import-Module $ToolkitModulePath -Force -ErrorAction Stop
 
 $ScriptVersion = "v1.0"
 $ScriptName    = $MyInvocation.MyCommand.Name
-$ReportSession = Initialize-ToolkitReportSession -ReportsRoot $DiretorioSaida -ModuleName 'Configuration'
-$LogDir        = $ReportSession.LogsPath
-$LogFile       = Join-Path $LogDir "$((Get-Date).ToString('yyyy-MM-dd_HHmmss'))-$([System.IO.Path]::GetFileNameWithoutExtension($ScriptName)).log"
+$ReportSession = $null
+$LogDir        = $null
+$LogFile       = $null
 
 # Fusos horarios brasileiros com ID Windows, offset UTC e regioes principais
 $BrazilTimeZones = [ordered]@{
@@ -392,6 +392,10 @@ if (-not (Test-IsAdministrator)) {
     Start-Process powershell.exe -ArgumentList $allArgs -Verb RunAs
     exit
 }
+
+$ReportSession = Initialize-ToolkitReportSession -ReportsRoot $DiretorioSaida -ModuleName 'Configuration'
+$LogDir        = $ReportSession.LogsPath
+$LogFile       = Join-Path $LogDir "$((Get-Date).ToString('yyyy-MM-dd_HHmmss'))-$([System.IO.Path]::GetFileNameWithoutExtension($ScriptName)).log"
 
 # Criar diretorio de log
 if (!(Test-Path $LogDir)) {

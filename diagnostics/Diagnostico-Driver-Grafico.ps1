@@ -1179,6 +1179,21 @@ function Show-GfxConsoleReport {
 # Execucao principal
 # ---------------------------------------------------------------------------
 
+if (-not (Test-IsAdministrator) -and [string]::IsNullOrWhiteSpace($DiretorioSaida)) {
+    $relaunchArgs = foreach ($kv in $PSBoundParameters.GetEnumerator()) {
+        if ($kv.Value -is [switch]) {
+            if ($kv.Value.IsPresent) { "-$($kv.Key)" }
+        }
+        else {
+            "-$($kv.Key)"
+            "$($kv.Value)"
+        }
+    }
+    $allArgs = @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', "`"$PSCommandPath`"") + $relaunchArgs
+    Start-Process powershell.exe -ArgumentList $allArgs -Verb RunAs
+    exit
+}
+
 $script:GfxSession = Initialize-GfxSession -BasePath $DiretorioSaida -ExecutionMode $Modo
 Start-Transcript -Path $script:GfxSession.TranscriptPath -Force | Out-Null
 

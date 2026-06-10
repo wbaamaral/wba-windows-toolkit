@@ -76,14 +76,9 @@ Import-Module $ToolkitModulePath -Force -ErrorAction Stop
 
 $ScriptVersion = "v1.0"
 $ScriptName    = $MyInvocation.MyCommand.Name
-$ReportSession = if ($NoLog) {
-    $null
-}
-else {
-    Initialize-ToolkitReportSession -ReportsRoot $DiretorioSaida -ModuleName 'Utilities'
-}
-$LogDir        = if ($ReportSession) { $ReportSession.LogsPath } else { $null }
-$LogFile       = if ($LogDir) { Join-Path $LogDir "$((Get-Date).ToString('yyyy-MM-dd_HHmmss'))-$([System.IO.Path]::GetFileNameWithoutExtension($ScriptName)).log" } else { $null }
+$ReportSession = $null
+$LogDir        = $null
+$LogFile       = $null
 
 $SystemFolders = @(
     'systemprofile', 'LocalService', 'NetworkService',
@@ -533,6 +528,10 @@ if (-not (Test-IsAdministrator)) {
 
 $transcriptActive = $false
 if (-not $NoLog) {
+    $ReportSession = Initialize-ToolkitReportSession -ReportsRoot $DiretorioSaida -ModuleName 'Utilities'
+    $LogDir        = $ReportSession.LogsPath
+    $LogFile       = Join-Path $LogDir "$((Get-Date).ToString('yyyy-MM-dd_HHmmss'))-$([System.IO.Path]::GetFileNameWithoutExtension($ScriptName)).log"
+
     if (!(Test-Path $LogDir)) { New-Item -ItemType Directory -Path $LogDir -Force | Out-Null }
     try {
         Start-Transcript -Path $LogFile -Encoding UTF8 -ErrorAction Stop

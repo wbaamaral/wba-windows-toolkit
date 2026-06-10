@@ -29,8 +29,15 @@
     $logsPath = Join-Path $sessionPath 'logs'
     $backupsPath = Join-Path $sessionPath 'backups'
 
-    New-Item -Path $logsPath -ItemType Directory -Force | Out-Null
-    New-Item -Path $backupsPath -ItemType Directory -Force | Out-Null
+    try {
+        New-Item -Path $logsPath -ItemType Directory -Force -ErrorAction Stop | Out-Null
+        New-Item -Path $backupsPath -ItemType Directory -Force -ErrorAction Stop | Out-Null
+    }
+    catch {
+        throw ("Nao foi possivel criar a sessao de relatorio em '{0}'. " +
+            "Execute o PowerShell como Administrador, informe -DiretorioSaida/-OutputPath para um local gravavel " +
+            "ou configure ReportsRoot com Set-ToolkitReportsRoot. Detalhes: {1}" -f $sessionPath, $_.Exception.Message)
+    }
 
     return [pscustomobject]@{
         ReportsRoot = $root

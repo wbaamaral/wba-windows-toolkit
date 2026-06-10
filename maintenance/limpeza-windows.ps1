@@ -149,14 +149,14 @@ Import-Module $ToolkitModulePath -Force -ErrorAction Stop
 
 $ScriptVersion = "v1.0"
 $ScriptName    = $MyInvocation.MyCommand.Name
-$ReportSession = Initialize-ToolkitReportSession -ReportsRoot $DiretorioSaida -ModuleName 'Maintenance'
-$LogDir = $ReportSession.LogsPath
+$ReportSession = $null
+$LogDir = $null
+$LogFile = $null
 
 # Quando o parâmetro NÃO foi passado explicitamente → modo interativo (Ask).
 # Quando foi passado explicitamente → usa o valor (inclusive o default 'Skip'/'None').
 $resolvedChkdskAction    = if ($PSBoundParameters.ContainsKey('ChkdskAction'))    { $ChkdskAction }    else { 'Ask' }
 $resolvedEventLogCleanup = if ($PSBoundParameters.ContainsKey('EventLogCleanup')) { $EventLogCleanup } else { 'Ask' }
-$LogFile = Join-Path $LogDir "$((Get-Date).ToString('yyyy-MM-dd_HHmmss'))-$([System.IO.Path]::GetFileNameWithoutExtension($ScriptName)).log"
 
 function Show-Help {
     Write-Host ""
@@ -448,6 +448,10 @@ if (-not (Test-IsAdministrator)) {
     Start-Process powershell.exe -ArgumentList $allArgs -Verb RunAs
     exit
 }
+
+$ReportSession = Initialize-ToolkitReportSession -ReportsRoot $DiretorioSaida -ModuleName 'Maintenance'
+$LogDir = $ReportSession.LogsPath
+$LogFile = Join-Path $LogDir "$((Get-Date).ToString('yyyy-MM-dd_HHmmss'))-$([System.IO.Path]::GetFileNameWithoutExtension($ScriptName)).log"
 
 if (!(Test-Path $LogDir)) {
     New-Item -ItemType Directory -Path $LogDir -Force | Out-Null
