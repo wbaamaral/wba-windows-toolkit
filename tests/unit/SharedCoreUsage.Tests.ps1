@@ -5,6 +5,7 @@ BeforeAll {
     $repoRoot = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
     $script:scriptPaths = @(
         (Join-Path $repoRoot 'configuration/Configurar-Idioma-Regional.ps1'),
+        (Join-Path $repoRoot 'maintenance/Diagnostico-Reparo-HD100.ps1'),
         (Join-Path $repoRoot 'maintenance/limpeza-windows.ps1'),
         (Join-Path $repoRoot 'updates/upgrade-windows.ps1'),
         (Join-Path $repoRoot 'active-directory/Diagnostico-GPO-Client.ps1'),
@@ -19,6 +20,16 @@ Describe 'Uso do modulo compartilhado' {
     It 'Scripts principais devem importar o modulo WbaToolkit.Core' {
         foreach ($path in $scriptPaths) {
             Get-Content -LiteralPath $path -Raw | Should -Match 'WbaToolkit\.Core\.psd1'
+        }
+    }
+
+    It 'Scripts principais devem ter sintaxe PowerShell valida' {
+        foreach ($path in $scriptPaths) {
+            $tokens = $null
+            $errors = $null
+            [System.Management.Automation.Language.Parser]::ParseFile($path, [ref]$tokens, [ref]$errors) | Out-Null
+
+            @($errors).Count | Should -Be 0
         }
     }
 

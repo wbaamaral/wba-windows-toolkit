@@ -44,6 +44,7 @@
             (Join-Path (Get-Location) 'configuration/Configurar-Idioma-Regional.ps1'),
             (Join-Path (Get-Location) 'diagnostics/Testar-conectividade-internet.ps1'),
             (Join-Path (Get-Location) 'inventory/Inventario-Hardware-Software.ps1'),
+            (Join-Path (Get-Location) 'maintenance/Diagnostico-Reparo-HD100.ps1'),
             (Join-Path (Get-Location) 'maintenance/limpeza-windows.ps1'),
             (Join-Path (Get-Location) 'updates/upgrade-windows.ps1'),
             (Join-Path (Get-Location) 'utilities/Analise-Espaco-Disco.ps1'),

@@ -577,7 +577,7 @@ if ($Silent) {
         $dryNote = if ($DryRun) { " (simulado)" } else { "" }
 
         Write-Host ""
-        Write-Host "Remocao concluida$dryNote: $ok removido(s), $fail falha(s). Liberado: $(Format-FileSize $result.FreedBytes)" -ForegroundColor Green
+        Write-Host "Remocao concluida${dryNote}: $ok removido(s), $fail falha(s). Liberado: $(Format-FileSize $result.FreedBytes)" -ForegroundColor Green
     }
 }
 else {
