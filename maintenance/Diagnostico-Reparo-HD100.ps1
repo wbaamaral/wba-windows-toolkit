@@ -352,6 +352,42 @@ function Confirm-HD100Action {
     return (Read-YesNo -Question $Question -DefaultYes:$false)
 }
 
+function Get-HD100LastBootPerformance {
+    [CmdletBinding()]
+    param()
+
+    try {
+        $event = Get-WinEvent -FilterHashtable @{
+            LogName = 'Microsoft-Windows-Diagnostics-Performance/Operational'
+            Id = 100
+        } -MaxEvents 1 -ErrorAction Stop
+
+        [xml]$xml = $event.ToXml()
+        $data = @{}
+        foreach ($item in @($xml.Event.EventData.Data)) {
+            if ($item.Name) {
+                $data[$item.Name] = $item.'#text'
+            }
+        }
+
+        $bootDurationMs = if ($data.ContainsKey('BootDuration')) { [int64]$data['BootDuration'] } else { $null }
+        return [pscustomobject]@{
+            Available = $true
+            EventTime = $event.TimeCreated
+            BootDurationMs = $bootDurationMs
+            BootDurationSeconds = if ($bootDurationMs) { [math]::Round($bootDurationMs / 1000, 2) } else { $null }
+            MainPathBootTimeMs = if ($data.ContainsKey('MainPathBootTime')) { [int64]$data['MainPathBootTime'] } else { $null }
+            BootPostBootTimeMs = if ($data.ContainsKey('BootPostBootTime')) { [int64]$data['BootPostBootTime'] } else { $null }
+        }
+    }
+    catch {
+        return [pscustomobject]@{
+            Available = $false
+            Error = $_.Exception.Message
+        }
+    }
+}
+
 function Get-HD100SystemInfo {
     [CmdletBinding()]
     param()
@@ -361,6 +397,7 @@ function Get-HD100SystemInfo {
     $bios = $null
     $computerInfo = $null
     $activePowerPlan = $null
+    $lastBootPerformance = Get-HD100LastBootPerformance
 
     try { $computerInfo = Get-ComputerInfo -ErrorAction Stop } catch { }
     try { $operatingSystem = Get-CimInstance Win32_OperatingSystem -ErrorAction Stop } catch { }
@@ -381,6 +418,9 @@ function Get-HD100SystemInfo {
         WindowsVersion = if ($computerInfo) { $computerInfo.WindowsVersion } else { $operatingSystem.Version }
         WindowsBuild = if ($computerInfo) { $computerInfo.WindowsBuildLabEx } else { $operatingSystem.BuildNumber }
         Architecture = if ($operatingSystem) { $operatingSystem.OSArchitecture } else { $env:PROCESSOR_ARCHITECTURE }
+        LastBootUpTime = if ($operatingSystem) { $operatingSystem.LastBootUpTime } else { $null }
+        LastBootDurationSeconds = if ($lastBootPerformance.Available) { $lastBootPerformance.BootDurationSeconds } else { $null }
+        LastBootPerformance = $lastBootPerformance
         Uptime = if ($operatingSystem) { New-TimeSpan -Start $operatingSystem.LastBootUpTime -End (Get-Date) } else { $null }
         Manufacturer = if ($computerSystem) { $computerSystem.Manufacturer } else { $null }
         Model = if ($computerSystem) { $computerSystem.Model } else { $null }
@@ -921,6 +961,472 @@ function Get-HD100ScheduledTasks {
     }
 }
 
+function New-HD100StableId {
+    [CmdletBinding()]
+    param([Parameter(Mandatory = $true)][string]$Value)
+
+    $bytes = [System.Text.Encoding]::UTF8.GetBytes($Value)
+    $hash = [System.Security.Cryptography.SHA256]::Create().ComputeHash($bytes)
+    return ([System.BitConverter]::ToString($hash) -replace '-', '').Substring(0, 12).ToLower()
+}
+
+function Get-HD100StartupStorePath {
+    [CmdletBinding()]
+    param()
+
+    return 'HKLM:\SOFTWARE\WBA\WindowsToolkit\HD100\StartupDisabled'
+}
+
+function Get-HD100StartupDisabledRoot {
+    [CmdletBinding()]
+    param()
+
+    $base = if ($env:ProgramData) { $env:ProgramData } else { $script:HD100Session.BackupsPath }
+    return (Join-Path $base 'WBA\HD100\StartupDisabled')
+}
+
+function Save-HD100StartupStoreItem {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory = $true)]$Item,
+        [string]$BackupPath
+    )
+
+    $storePath = Get-HD100StartupStorePath
+    New-Item -Path $storePath -Force | Out-Null
+    $itemPath = Join-Path $storePath $Item.Id
+    New-Item -Path $itemPath -Force | Out-Null
+
+    $properties = @{
+        Id = $Item.Id
+        Name = $Item.Name
+        SourceType = $Item.SourceType
+        Scope = $Item.Scope
+        Location = $Item.Location
+        ValueName = $Item.ValueName
+        Command = $Item.Command
+        BackupPath = $BackupPath
+        DisabledAt = (Get-Date).ToString('o')
+    }
+
+    foreach ($key in $properties.Keys) {
+        New-ItemProperty -Path $itemPath -Name $key -Value ([string]$properties[$key]) -PropertyType String -Force | Out-Null
+    }
+}
+
+function Remove-HD100StartupStoreItem {
+    [CmdletBinding()]
+    param([Parameter(Mandatory = $true)][string]$Id)
+
+    $path = Join-Path (Get-HD100StartupStorePath) $Id
+    if (Test-Path -LiteralPath $path) {
+        Remove-Item -LiteralPath $path -Recurse -Force
+    }
+}
+
+function ConvertTo-HD100StartupItem {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory = $true)][string]$SourceType,
+        [Parameter(Mandatory = $true)][string]$Scope,
+        [Parameter(Mandatory = $true)][string]$Location,
+        [Parameter(Mandatory = $true)][string]$Name,
+        [string]$ValueName,
+        [string]$Command,
+        [bool]$Enabled = $true,
+        [bool]$ManagedDisabled = $false,
+        [string]$BackupPath
+    )
+
+    $id = New-HD100StableId -Value "$SourceType|$Location|$Name|$ValueName"
+    [pscustomobject]@{
+        Id = $id
+        Name = $Name
+        SourceType = $SourceType
+        Scope = $Scope
+        Location = $Location
+        ValueName = $ValueName
+        Command = $Command
+        Enabled = $Enabled
+        State = if ($Enabled) { 'On' } else { 'Off' }
+        ManagedDisabled = $ManagedDisabled
+        BackupPath = $BackupPath
+        CanDisable = $Enabled
+        CanEnable = -not $Enabled
+        CanRemove = $true
+    }
+}
+
+function Get-HD100RegistryStartupItems {
+    [CmdletBinding()]
+    param()
+
+    $locations = @(
+        @{ Scope = 'Machine'; Path = 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Run' },
+        @{ Scope = 'Machine'; Path = 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\RunOnce' },
+        @{ Scope = 'Machine32'; Path = 'HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Run' },
+        @{ Scope = 'User'; Path = 'HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Run' },
+        @{ Scope = 'User'; Path = 'HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\RunOnce' }
+    )
+
+    $items = [System.Collections.ArrayList]::new()
+    foreach ($location in $locations) {
+        if (-not (Test-Path -LiteralPath $location.Path)) {
+            continue
+        }
+
+        $properties = Get-ItemProperty -LiteralPath $location.Path -ErrorAction SilentlyContinue
+        foreach ($property in @($properties.PSObject.Properties | Where-Object { $_.Name -notmatch '^PS' })) {
+            $null = $items.Add((ConvertTo-HD100StartupItem `
+                -SourceType 'Registry' `
+                -Scope $location.Scope `
+                -Location $location.Path `
+                -Name $property.Name `
+                -ValueName $property.Name `
+                -Command ([string]$property.Value) `
+                -Enabled $true))
+        }
+    }
+
+    return @($items)
+}
+
+function Get-HD100StartupFolderItems {
+    [CmdletBinding()]
+    param()
+
+    $folders = @(
+        @{ Scope = 'User'; Path = [Environment]::GetFolderPath('Startup') },
+        @{ Scope = 'Machine'; Path = [Environment]::GetFolderPath('CommonStartup') }
+    )
+
+    $items = [System.Collections.ArrayList]::new()
+    foreach ($folder in $folders) {
+        if ([string]::IsNullOrWhiteSpace($folder.Path) -or -not (Test-Path -LiteralPath $folder.Path)) {
+            continue
+        }
+
+        foreach ($file in @(Get-ChildItem -LiteralPath $folder.Path -File -ErrorAction SilentlyContinue)) {
+            $null = $items.Add((ConvertTo-HD100StartupItem `
+                -SourceType 'StartupFolder' `
+                -Scope $folder.Scope `
+                -Location $folder.Path `
+                -Name $file.Name `
+                -ValueName $file.Name `
+                -Command $file.FullName `
+                -Enabled $true))
+        }
+    }
+
+    return @($items)
+}
+
+function Get-HD100LogonStartupTaskItems {
+    [CmdletBinding()]
+    param()
+
+    try {
+        return @(Get-ScheduledTask -ErrorAction Stop | Where-Object {
+            @($_.Triggers | Where-Object {
+                $_.CimClass.CimClassName -in @('MSFT_TaskLogonTrigger', 'MSFT_TaskBootTrigger')
+            }).Count -gt 0
+        } | ForEach-Object {
+            $actionText = @($_.Actions | ForEach-Object {
+                "$($_.Execute) $($_.Arguments)".Trim()
+            }) -join '; '
+
+            ConvertTo-HD100StartupItem `
+                -SourceType 'ScheduledTask' `
+                -Scope 'TaskScheduler' `
+                -Location $_.TaskPath `
+                -Name ("$($_.TaskPath)$($_.TaskName)") `
+                -ValueName $_.TaskName `
+                -Command $actionText `
+                -Enabled ([string]$_.State -ne 'Disabled')
+        })
+    }
+    catch {
+        return @([pscustomobject]@{
+            Id = 'erro'
+            Name = 'Erro ao consultar tarefas de inicializacao'
+            SourceType = 'ScheduledTask'
+            Scope = 'TaskScheduler'
+            Location = $null
+            ValueName = $null
+            Command = $_.Exception.Message
+            Enabled = $false
+            State = 'Erro'
+            ManagedDisabled = $false
+            BackupPath = $null
+            CanDisable = $false
+            CanEnable = $false
+            CanRemove = $false
+        })
+    }
+}
+
+function Get-HD100ManagedDisabledStartupItems {
+    [CmdletBinding()]
+    param()
+
+    $storePath = Get-HD100StartupStorePath
+    if (-not (Test-Path -LiteralPath $storePath)) {
+        return @()
+    }
+
+    return @(Get-ChildItem -LiteralPath $storePath -ErrorAction SilentlyContinue | ForEach-Object {
+        $item = Get-ItemProperty -LiteralPath $_.PSPath
+        ConvertTo-HD100StartupItem `
+            -SourceType $item.SourceType `
+            -Scope $item.Scope `
+            -Location $item.Location `
+            -Name $item.Name `
+            -ValueName $item.ValueName `
+            -Command $item.Command `
+            -Enabled $false `
+            -ManagedDisabled $true `
+            -BackupPath $item.BackupPath
+    })
+}
+
+function Get-HD100StartupItems {
+    [CmdletBinding()]
+    param()
+
+    $items = @(
+        Get-HD100RegistryStartupItems
+        Get-HD100StartupFolderItems
+        Get-HD100LogonStartupTaskItems
+        Get-HD100ManagedDisabledStartupItems
+    )
+
+    return @($items |
+        Group-Object Id |
+        ForEach-Object {
+            $managed = @($_.Group | Where-Object { $_.ManagedDisabled } | Select-Object -First 1)
+            if ($managed) { $managed } else { $_.Group | Select-Object -First 1 }
+        } |
+        Sort-Object SourceType, Scope, Name)
+}
+
+function Add-HD100StartupChange {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory = $true)][string]$Action,
+        [Parameter(Mandatory = $true)]$Item,
+        [string]$PreviousState,
+        [string]$NewState,
+        [bool]$Reversible
+    )
+
+    $null = $script:HD100Changes.Add([pscustomobject]@{
+        DataHora = Get-Date
+        Acao = $Action
+        Alvo = $Item.Name
+        Tipo = $Item.SourceType
+        Local = $Item.Location
+        EstadoAnterior = $PreviousState
+        EstadoNovo = $NewState
+        Reversivel = $Reversible
+    })
+}
+
+function Disable-HD100StartupItem {
+    [CmdletBinding()]
+    param([Parameter(Mandatory = $true)]$Item)
+
+    if (-not $Item.Enabled) {
+        Write-Warn 'Esta entrada ja esta desabilitada.'
+        return
+    }
+
+    if ($DryRun) {
+        Write-HD100Log -Message "DRY-RUN: desabilitaria inicializacao '$($Item.Name)'."
+        return
+    }
+
+    switch ($Item.SourceType) {
+        'Registry' {
+            Save-HD100StartupStoreItem -Item $Item
+            Remove-ItemProperty -LiteralPath $Item.Location -Name $Item.ValueName -ErrorAction Stop
+        }
+        'StartupFolder' {
+            $disabledRoot = Get-HD100StartupDisabledRoot
+            New-Item -Path $disabledRoot -ItemType Directory -Force | Out-Null
+            $backupPath = Join-Path $disabledRoot ("$($Item.Id)-$($Item.ValueName)")
+            Save-HD100StartupStoreItem -Item $Item -BackupPath $backupPath
+            Move-Item -LiteralPath $Item.Command -Destination $backupPath -Force
+        }
+        'ScheduledTask' {
+            Save-HD100StartupStoreItem -Item $Item
+            Disable-ScheduledTask -TaskName $Item.ValueName -TaskPath $Item.Location -ErrorAction Stop | Out-Null
+        }
+        default {
+            throw "Tipo de inicializacao nao suportado: $($Item.SourceType)"
+        }
+    }
+
+    Add-HD100StartupChange -Action 'DesabilitarInicializacao' -Item $Item -PreviousState 'On' -NewState 'Off' -Reversible $true
+    Write-Ok "Inicializacao desabilitada: $($Item.Name)"
+}
+
+function Enable-HD100StartupItem {
+    [CmdletBinding()]
+    param([Parameter(Mandatory = $true)]$Item)
+
+    if ($Item.Enabled -and -not $Item.ManagedDisabled) {
+        Write-Warn 'Esta entrada ja esta habilitada.'
+        return
+    }
+
+    if ($DryRun) {
+        Write-HD100Log -Message "DRY-RUN: habilitaria inicializacao '$($Item.Name)'."
+        return
+    }
+
+    switch ($Item.SourceType) {
+        'Registry' {
+            New-Item -Path $Item.Location -Force | Out-Null
+            New-ItemProperty -Path $Item.Location -Name $Item.ValueName -Value $Item.Command -PropertyType String -Force | Out-Null
+            Remove-HD100StartupStoreItem -Id $Item.Id
+        }
+        'StartupFolder' {
+            if (-not $Item.BackupPath -or -not (Test-Path -LiteralPath $Item.BackupPath)) {
+                throw "Backup do atalho nao encontrado para $($Item.Name)."
+            }
+            New-Item -Path $Item.Location -ItemType Directory -Force | Out-Null
+            Move-Item -LiteralPath $Item.BackupPath -Destination (Join-Path $Item.Location $Item.ValueName) -Force
+            Remove-HD100StartupStoreItem -Id $Item.Id
+        }
+        'ScheduledTask' {
+            Enable-ScheduledTask -TaskName $Item.ValueName -TaskPath $Item.Location -ErrorAction Stop | Out-Null
+            Remove-HD100StartupStoreItem -Id $Item.Id
+        }
+        default {
+            throw "Tipo de inicializacao nao suportado: $($Item.SourceType)"
+        }
+    }
+
+    Add-HD100StartupChange -Action 'HabilitarInicializacao' -Item $Item -PreviousState 'Off' -NewState 'On' -Reversible $true
+    Write-Ok "Inicializacao habilitada: $($Item.Name)"
+}
+
+function Remove-HD100StartupItem {
+    [CmdletBinding()]
+    param([Parameter(Mandatory = $true)]$Item)
+
+    $confirmation = Read-Host "Para remover definitivamente esta entrada de inicializacao, digite REMOVER INICIALIZACAO"
+    if ($confirmation -ne 'REMOVER INICIALIZACAO') {
+        Write-Warn 'Remocao cancelada.'
+        return
+    }
+
+    if ($DryRun) {
+        Write-HD100Log -Message "DRY-RUN: removeria inicializacao '$($Item.Name)'."
+        return
+    }
+
+    switch ($Item.SourceType) {
+        'Registry' {
+            if ($Item.ManagedDisabled) {
+                Remove-HD100StartupStoreItem -Id $Item.Id
+            }
+            elseif (Test-Path -LiteralPath $Item.Location) {
+                Remove-ItemProperty -LiteralPath $Item.Location -Name $Item.ValueName -ErrorAction Stop
+            }
+        }
+        'StartupFolder' {
+            if ($Item.ManagedDisabled -and $Item.BackupPath -and (Test-Path -LiteralPath $Item.BackupPath)) {
+                Remove-Item -LiteralPath $Item.BackupPath -Force
+                Remove-HD100StartupStoreItem -Id $Item.Id
+            }
+            elseif ($Item.Command -and (Test-Path -LiteralPath $Item.Command)) {
+                Remove-Item -LiteralPath $Item.Command -Force
+            }
+        }
+        'ScheduledTask' {
+            Unregister-ScheduledTask -TaskName $Item.ValueName -TaskPath $Item.Location -Confirm:$false -ErrorAction Stop
+            if ($Item.ManagedDisabled) {
+                Remove-HD100StartupStoreItem -Id $Item.Id
+            }
+        }
+        default {
+            throw "Tipo de inicializacao nao suportado: $($Item.SourceType)"
+        }
+    }
+
+    Add-HD100StartupChange -Action 'RemoverInicializacao' -Item $Item -PreviousState $Item.State -NewState 'Removido' -Reversible $false
+    Write-Ok "Entrada removida da inicializacao: $($Item.Name)"
+}
+
+function Show-HD100StartupItems {
+    [CmdletBinding()]
+    param([Parameter(Mandatory = $true)][object[]]$Items)
+
+    Write-Host ''
+    Write-Host 'Programas na inicializacao' -ForegroundColor Cyan
+    Write-Host '-------------------------' -ForegroundColor Cyan
+
+    $index = 1
+    foreach ($item in @($Items)) {
+        $stateText = if ($item.Enabled) { 'ON ' } else { 'OFF' }
+        $color = if ($item.Enabled) { 'Green' } else { 'DarkGray' }
+        Write-Host ("[{0,2}] " -f $index) -NoNewline
+        Write-Host $stateText -ForegroundColor $color -NoNewline
+        Write-Host (" {0} | {1} | {2}" -f $item.SourceType, $item.Scope, $item.Name)
+        $index++
+    }
+
+    Write-Host ''
+}
+
+function Invoke-HD100StartupInteractive {
+    [CmdletBinding()]
+    param([object[]]$Items)
+
+    while ($true) {
+        $currentItems = @(Get-HD100StartupItems)
+        if (@($currentItems).Count -eq 0) {
+            Write-Info 'Nenhuma entrada de inicializacao foi encontrada.'
+            return
+        }
+
+        Show-HD100StartupItems -Items $currentItems
+        $choice = Read-Host 'Digite o numero da entrada para alterar ou 0 para continuar'
+        if ($choice -in @('', '0')) {
+            return
+        }
+
+        $number = 0
+        if (-not [int]::TryParse($choice, [ref]$number) -or $number -lt 1 -or $number -gt @($currentItems).Count) {
+            Write-Warn 'Opcao invalida.'
+            continue
+        }
+
+        $item = $currentItems[$number - 1]
+        Write-Host ''
+        Write-Host "Selecionado: $($item.Name)" -ForegroundColor Cyan
+        Write-Host "Comando: $($item.Command)"
+        Write-Host '[D] Desabilitar para diagnostico'
+        Write-Host '[H] Habilitar novamente'
+        Write-Host '[R] Remover definitivamente da inicializacao'
+        Write-Host '[V] Voltar'
+        $action = (Read-Host 'Acao').Trim().ToUpperInvariant()
+
+        try {
+            switch ($action) {
+                'D' { Disable-HD100StartupItem -Item $item }
+                'H' { Enable-HD100StartupItem -Item $item }
+                'R' { Remove-HD100StartupItem -Item $item }
+                default { }
+            }
+        }
+        catch {
+            Write-HD100Log -Level 'ERROR' -Message "Falha ao alterar inicializacao '$($item.Name)': $($_.Exception.Message)"
+        }
+    }
+}
+
 function Get-HD100BankPlugins {
     [CmdletBinding()]
     param()
@@ -1072,6 +1578,14 @@ function Get-HD100Recommendation {
         $null = $recommendations.Add('Plugin bancario detectado. Fazer teste controlado antes de desinstalacao manual.')
     }
 
+    $enabledStartup = @($Diagnostic.StartupItems | Where-Object { $_.Enabled -eq $true })
+    if (@($enabledStartup).Count -ge 8) {
+        if ($category -eq 'Causa nao identificada.') {
+            $category = 'Provavel carga excessiva na inicializacao.'
+        }
+        $null = $recommendations.Add("Foram encontradas $(@($enabledStartup).Count) entradas ativas na inicializacao. No modo Assistido, desabilite uma por vez para diagnostico e reinicie para medir impacto.")
+    }
+
     if (@($recommendations).Count -eq 0) {
         $null = $recommendations.Add('Executar nova medicao durante o periodo em que o disco estiver em 100%.')
         $null = $recommendations.Add('Verificar Windows Update, indexacao e antivirus em execucao.')
@@ -1145,6 +1659,14 @@ function Invoke-HD100Diagnostic {
     Write-HD100Section 'Coletando servicos, tarefas e aplicativos relacionados'
     $services = Get-HD100ServiceState
     $tasks = Get-HD100ScheduledTasks
+    $startupItems = Get-HD100StartupItems
+
+    if ($Modo -eq 'Assistido') {
+        Write-HD100Section 'Modo Assistido: avaliando programas na inicializacao'
+        Invoke-HD100StartupInteractive -Items $startupItems
+        $startupItems = Get-HD100StartupItems
+    }
+
     $bankPlugins = Get-HD100BankPlugins
     $antivirus = Get-HD100Antivirus
     $oneDrive = Get-HD100OneDrive
@@ -1175,6 +1697,7 @@ function Invoke-HD100Diagnostic {
         ChkdskRepair = $chkdskRepair
         Services = @($services)
         ScheduledTasks = @($tasks)
+        StartupItems = @($startupItems)
         BankPlugins = $bankPlugins
         Antivirus = @($antivirus)
         OneDrive = $oneDrive
@@ -1210,6 +1733,17 @@ function Export-HD100ReportText {
     $diskAlert = @($Diagnostic.DiskHealth.Alerts).Count -gt 0
     $services = @($Diagnostic.Services | Where-Object { $_.Name -in @('WSearch', 'SysMain') -and $_.Status -eq 'Running' }).Name -join ', '
     if ([string]::IsNullOrWhiteSpace($services)) { $services = 'Nenhum destaque inicial' }
+    $startupItems = @($Diagnostic.StartupItems)
+    $startupOnCount = @($startupItems | Where-Object { $_.Enabled -eq $true }).Count
+    $startupOffCount = @($startupItems | Where-Object { $_.Enabled -eq $false }).Count
+    $startupRows = @($startupItems | Select-Object -First 25 | ForEach-Object {
+        "[{0}] {1} | {2} | {3}`r`n  {4}" -f $_.State.ToUpperInvariant(), $_.SourceType, $_.Scope, $_.Name, $_.Command
+    }) -join "`r`n"
+    if ([string]::IsNullOrWhiteSpace($startupRows)) {
+        $startupRows = 'Nenhuma entrada de inicializacao encontrada nas fontes consultadas.'
+    }
+    $bootDuration = if ($Diagnostic.System.LastBootDurationSeconds) { "$($Diagnostic.System.LastBootDurationSeconds) segundos" } else { 'Nao disponivel' }
+    $lastBoot = if ($Diagnostic.System.LastBootUpTime) { ([datetime]$Diagnostic.System.LastBootUpTime).ToString('yyyy-MM-dd HH:mm:ss') } else { 'Nao disponivel' }
     $healthSummary = $Diagnostic.DiskHealth.Summary
     $healthGauge = if ($healthSummary) { $healthSummary.Gauge } else { '[----------] Inconclusivo' }
     $healthStatus = if ($healthSummary) { $healthSummary.Status } else { $Diagnostic.DiskHealth.Status }
@@ -1271,6 +1805,9 @@ Espaco livre no ${systemDrive}:              $(if ($systemVolume) { "$($systemVo
 Integridade Windows:             DISM diagnostico executado; SFC reservado ao modo Assistido
 Servicos suspeitos:              $services
 Plugins bancarios:               $(if ($Diagnostic.BankPlugins.Detected) { 'Detectado' } else { 'Nao detectado' })
+Inicializacao ativa/inativa:      $startupOnCount ON / $startupOffCount OFF
+Ultimo boot:                     $lastBoot
+Tempo do ultimo boot:            $bootDuration
 
 ------------------------------------------------------------
  SAUDE DOS DISCOS
@@ -1283,6 +1820,11 @@ $diskRows
 
 Observacoes:
 $healthNoteText
+
+------------------------------------------------------------
+ PROGRAMAS NA INICIALIZACAO
+------------------------------------------------------------
+$startupRows
 
 ------------------------------------------------------------
  RECOMENDACAO
@@ -1325,6 +1867,11 @@ function Export-HD100ReportHtml {
     else {
         '#dc2626'
     }
+    $startupItems = @($Diagnostic.StartupItems)
+    $startupOnCount = @($startupItems | Where-Object { $_.Enabled -eq $true }).Count
+    $startupOffCount = @($startupItems | Where-Object { $_.Enabled -eq $false }).Count
+    $bootDuration = if ($Diagnostic.System.LastBootDurationSeconds) { "$($Diagnostic.System.LastBootDurationSeconds) segundos" } else { 'Nao disponivel' }
+    $lastBoot = if ($Diagnostic.System.LastBootUpTime) { ([datetime]$Diagnostic.System.LastBootUpTime).ToString('dd/MM/yyyy HH:mm:ss') } else { 'Nao disponivel' }
 
     $summaryRows = @(
         @('Computador', $Diagnostic.System.ComputerName),
@@ -1334,6 +1881,9 @@ function Export-HD100ReportHtml {
         @('Uso medio de disco', "$($Diagnostic.DiskUsage.DiskTimePercent)%"),
         @('Saude do disco', $Diagnostic.DiskHealth.Status),
         @('Vida util aproximada', "$(if ($healthSummary) { $healthSummary.ApproximateLifePercent } else { 'N/I' })%"),
+        @('Inicializacao', "$startupOnCount ON / $startupOffCount OFF"),
+        @('Ultimo boot', $lastBoot),
+        @('Tempo do ultimo boot', $bootDuration),
         @('Eventos criticos', $Diagnostic.Events.CriticalCount)
     ) | ForEach-Object {
         '<tr class="border-b border-gray-200"><td class="py-2 px-3 font-medium">{0}</td><td class="py-2 px-3">{1}</td></tr>' -f
@@ -1359,6 +1909,21 @@ function Export-HD100ReportHtml {
     }) -join "`r`n"
     if ([string]::IsNullOrWhiteSpace($healthNotes)) {
         $healthNotes = '<li>Nenhum alerta direto de saude fisica foi reportado pelas fontes consultadas.</li>'
+    }
+
+    $startupRows = @($startupItems | Select-Object -First 50 | ForEach-Object {
+        $badgeClass = if ($_.Enabled) { 'bg-green-100 text-green-700' } else { 'bg-gray-200 text-gray-600' }
+        $stateText = if ($_.Enabled) { 'ON' } else { 'OFF' }
+        '<tr class="border-b border-gray-200 break-inside-avoid"><td class="py-2 px-3"><span class="inline-block min-w-12 text-center px-2 py-1 rounded text-xs font-bold {0}">{1}</span></td><td class="py-2 px-3">{2}</td><td class="py-2 px-3">{3}</td><td class="py-2 px-3 font-medium">{4}</td><td class="py-2 px-3 text-xs text-gray-600 break-all">{5}</td></tr>' -f
+            $badgeClass,
+            $stateText,
+            (ConvertTo-HtmlSafe -Value $_.SourceType),
+            (ConvertTo-HtmlSafe -Value $_.Scope),
+            (ConvertTo-HtmlSafe -Value $_.Name),
+            (ConvertTo-HtmlSafe -Value $_.Command)
+    }) -join "`r`n"
+    if ([string]::IsNullOrWhiteSpace($startupRows)) {
+        $startupRows = '<tr><td colspan="5" class="py-3 px-4 text-gray-500">Nenhuma entrada de inicializacao encontrada nas fontes consultadas.</td></tr>'
     }
 
     $topRows = @($Diagnostic.TopIOProcesses | Select-Object -First 10 | ForEach-Object {
@@ -1432,6 +1997,12 @@ function Export-HD100ReportHtml {
             </table>
             <ul class="list-disc pl-6 mb-8 text-sm text-gray-600">$healthNotes</ul>
 
+            <h2 class="text-xl font-bold mb-3">Programas na inicializacao</h2>
+            <table class="w-full text-left border-collapse mb-8">
+                <thead><tr class="bg-gray-100 text-gray-700 uppercase text-sm border-b-2 border-gray-300"><th class="py-3 px-4">Estado</th><th class="py-3 px-4">Origem</th><th class="py-3 px-4">Escopo</th><th class="py-3 px-4">Nome</th><th class="py-3 px-4">Comando</th></tr></thead>
+                <tbody>$startupRows</tbody>
+            </table>
+
             <h2 class="text-xl font-bold mb-3">Top processos por I/O</h2>
             <table class="w-full text-left border-collapse mb-8">
                 <thead><tr class="bg-gray-100 text-gray-700 uppercase text-sm border-b-2 border-gray-300"><th class="py-3 px-4">Processo</th><th class="py-3 px-4">PID</th><th class="py-3 px-4 text-right">I/O MB</th></tr></thead>
@@ -1459,8 +2030,26 @@ function Invoke-HD100Rollback {
     param()
 
     Write-Title 'WBA Windows Toolkit - Rollback HD100'
-    Write-Warn 'A primeira versao nao aplica alteracoes reversiveis automaticamente.'
-    Write-Info 'Quando existirem alteracoes registradas, elas serao lidas de rollback.json.'
+    $items = @(Get-HD100ManagedDisabledStartupItems)
+    if (@($items).Count -eq 0) {
+        Write-Info 'Nenhuma entrada de inicializacao desabilitada pelo HD100 foi encontrada.'
+        return
+    }
+
+    Show-HD100StartupItems -Items $items
+    if (-not (Confirm-HD100Action -Question "Reativar $(@($items).Count) entrada(s) de inicializacao desabilitada(s) pelo HD100?")) {
+        Write-Warn 'Rollback cancelado pelo operador.'
+        return
+    }
+
+    foreach ($item in $items) {
+        try {
+            Enable-HD100StartupItem -Item $item
+        }
+        catch {
+            Write-HD100Log -Level 'ERROR' -Message "Falha no rollback da inicializacao '$($item.Name)': $($_.Exception.Message)"
+        }
+    }
 }
 
 function Get-HD100LatestSessionPath {
@@ -1513,11 +2102,6 @@ function Invoke-HD100ReportMode {
     Write-Host $text
 }
 
-if ($Modo -eq 'Rollback') {
-    Invoke-HD100Rollback
-    exit 0
-}
-
 if ($Modo -eq 'Relatorio') {
     Invoke-HD100ReportMode
     exit 0
@@ -1548,6 +2132,11 @@ Write-Info "Versao: $ScriptVersion"
 
 $script:HD100Session = Initialize-HD100Session -BasePath $DiretorioSaida -ExecutionMode $Modo
 Write-Info "Diretorio da execucao: $($script:HD100Session.Path)"
+
+if ($Modo -eq 'Rollback') {
+    Invoke-HD100Rollback
+    exit 0
+}
 
 $diagnostic = Invoke-HD100Diagnostic
 Export-HD100Json -Diagnostic $diagnostic
