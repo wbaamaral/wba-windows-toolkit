@@ -187,6 +187,76 @@ function Write-HD100Section {
     Write-HD100Log -Message $Title
 }
 
+function Get-HD100Utf8BomEncoding {
+    [CmdletBinding()]
+    param()
+
+    return [System.Text.UTF8Encoding]::new($true)
+}
+
+function Write-HD100TextFile {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Path,
+
+        [Parameter(Mandatory = $true)]
+        [AllowEmptyString()]
+        [string]$Content,
+
+        [switch]$Append
+    )
+
+    $encoding = Get-HD100Utf8BomEncoding
+    if ($Append -and (Test-Path -LiteralPath $Path)) {
+        [System.IO.File]::AppendAllText($Path, $Content, $encoding)
+    }
+    else {
+        [System.IO.File]::WriteAllText($Path, $Content, $encoding)
+    }
+}
+
+function Get-HD100CodePageEncoding {
+    [CmdletBinding()]
+    param([Parameter(Mandatory = $true)][int]$CodePage)
+
+    try {
+        return [System.Text.Encoding]::GetEncoding($CodePage)
+    }
+    catch {
+        return [System.Text.Encoding]::Default
+    }
+}
+
+function Read-HD100NativeOutputFile {
+    [CmdletBinding()]
+    param([Parameter(Mandatory = $true)][string]$Path)
+
+    if (-not (Test-Path -LiteralPath $Path)) {
+        return ''
+    }
+
+    $bytes = [System.IO.File]::ReadAllBytes($Path)
+    if ($bytes.Length -eq 0) {
+        return ''
+    }
+
+    if ($bytes.Length -ge 3 -and $bytes[0] -eq 0xEF -and $bytes[1] -eq 0xBB -and $bytes[2] -eq 0xBF) {
+        return [System.Text.Encoding]::UTF8.GetString($bytes)
+    }
+
+    if ($bytes.Length -ge 2 -and $bytes[0] -eq 0xFF -and $bytes[1] -eq 0xFE) {
+        return [System.Text.Encoding]::Unicode.GetString($bytes)
+    }
+
+    if ($bytes.Length -ge 2 -and $bytes[0] -eq 0xFE -and $bytes[1] -eq 0xFF) {
+        return [System.Text.Encoding]::BigEndianUnicode.GetString($bytes)
+    }
+
+    $oemEncoding = Get-HD100CodePageEncoding -CodePage ([System.Globalization.CultureInfo]::CurrentCulture.TextInfo.OEMCodePage)
+    return $oemEncoding.GetString($bytes)
+}
+
 function Invoke-HD100ExternalCommand {
     [CmdletBinding()]
     param(
@@ -209,13 +279,8 @@ function Invoke-HD100ExternalCommand {
     $header = "===== $commandLine - $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') ====="
 
     if ($DryRun -or $Skip) {
-        $content = @($header, "DRY-RUN: $commandLine")
-        if ($Append) {
-            $content | Out-File -LiteralPath $logPath -Encoding UTF8 -Append
-        }
-        else {
-            $content | Out-File -LiteralPath $logPath -Encoding UTF8
-        }
+        $content = (@($header, "DRY-RUN: $commandLine") -join "`r`n") + "`r`n"
+        Write-HD100TextFile -Path $logPath -Content $content -Append:$Append
 
         return [pscustomobject]@{
             Executed = $false
@@ -226,38 +291,48 @@ function Invoke-HD100ExternalCommand {
     }
 
     try {
-        $output = & $FilePath @ArgumentList 2>&1
-        $exitCode = if ($LASTEXITCODE -ne $null) { $LASTEXITCODE } else { 0 }
-        if ($Append) {
-            $header | Out-File -LiteralPath $logPath -Encoding UTF8 -Append
-            $output | Out-File -LiteralPath $logPath -Encoding UTF8 -Append
-        }
-        else {
-            @($header) + @($output) | Out-File -LiteralPath $logPath -Encoding UTF8
-        }
+        $tempBase = Join-Path ([System.IO.Path]::GetTempPath()) ("wba-hd100-{0}" -f ([System.Guid]::NewGuid().ToString('N')))
+        $stdoutPath = "$tempBase.out"
+        $stderrPath = "$tempBase.err"
+
+        $process = Start-Process -FilePath $FilePath `
+            -ArgumentList $ArgumentList `
+            -Wait `
+            -PassThru `
+            -NoNewWindow `
+            -RedirectStandardOutput $stdoutPath `
+            -RedirectStandardError $stderrPath
+
+        $stdout = Read-HD100NativeOutputFile -Path $stdoutPath
+        $stderr = Read-HD100NativeOutputFile -Path $stderrPath
+        $outputText = (@($stdout, $stderr) | Where-Object { -not [string]::IsNullOrWhiteSpace($_) }) -join "`r`n"
+        $content = (@($header, $outputText) -join "`r`n").TrimEnd() + "`r`n"
+        Write-HD100TextFile -Path $logPath -Content $content -Append:$Append
 
         return [pscustomobject]@{
             Executed = $true
-            ExitCode = $exitCode
+            ExitCode = $process.ExitCode
             LogPath = $logPath
-            Output = @($output) -join "`r`n"
+            Output = $outputText
         }
     }
     catch {
         $message = $_.Exception.Message
-        $content = @($header, $message)
-        if ($Append) {
-            $content | Out-File -LiteralPath $logPath -Encoding UTF8 -Append
-        }
-        else {
-            $content | Out-File -LiteralPath $logPath -Encoding UTF8
-        }
+        $content = (@($header, $message) -join "`r`n") + "`r`n"
+        Write-HD100TextFile -Path $logPath -Content $content -Append:$Append
 
         return [pscustomobject]@{
             Executed = $true
             ExitCode = -1
             LogPath = $logPath
             Output = $message
+        }
+    }
+    finally {
+        foreach ($path in @($stdoutPath, $stderrPath)) {
+            if ($path -and (Test-Path -LiteralPath $path)) {
+                Remove-Item -LiteralPath $path -Force -ErrorAction SilentlyContinue
+            }
         }
     }
 }
@@ -439,6 +514,181 @@ function Get-HD100TopIOProcess {
     }
 }
 
+function Get-HD100ReliabilityCounters {
+    [CmdletBinding()]
+    param([object[]]$PhysicalDisks)
+
+    $items = [System.Collections.ArrayList]::new()
+
+    foreach ($disk in @($PhysicalDisks)) {
+        try {
+            $counter = Get-StorageReliabilityCounter -PhysicalDisk $disk -ErrorAction Stop
+            $null = $items.Add([pscustomobject]@{
+                FriendlyName = $disk.FriendlyName
+                Wear = $counter.Wear
+                Temperature = $counter.Temperature
+                ReadErrorsTotal = $counter.ReadErrorsTotal
+                WriteErrorsTotal = $counter.WriteErrorsTotal
+                ReadErrorsCorrected = $counter.ReadErrorsCorrected
+                WriteErrorsCorrected = $counter.WriteErrorsCorrected
+                PowerOnHours = $counter.PowerOnHours
+            })
+        }
+        catch { }
+    }
+
+    return @($items)
+}
+
+function Get-HD100DiskHealthScore {
+    [CmdletBinding()]
+    param(
+        [object[]]$PhysicalDisks,
+        [object[]]$Disks,
+        [object[]]$DiskDrives,
+        [object[]]$Smart,
+        [object[]]$Reliability,
+        [object[]]$Alerts
+    )
+
+    $score = 100
+    $notes = [System.Collections.ArrayList]::new()
+
+    foreach ($item in @($Smart | Where-Object { $_.PredictFailure -eq $true })) {
+        $score = [math]::Min($score, 20)
+        $null = $notes.Add("SMART indicou previsao de falha para $($item.InstanceName).")
+    }
+
+    foreach ($disk in @($PhysicalDisks | Where-Object { $_.HealthStatus -and $_.HealthStatus -ne 'Healthy' })) {
+        $score -= 35
+        $null = $notes.Add("Get-PhysicalDisk reportou HealthStatus $($disk.HealthStatus) em $($disk.FriendlyName).")
+    }
+
+    foreach ($disk in @($Disks | Where-Object { $_.HealthStatus -and $_.HealthStatus -ne 'Healthy' })) {
+        $score -= 35
+        $null = $notes.Add("Get-Disk reportou HealthStatus $($disk.HealthStatus) no disco $($disk.Number).")
+    }
+
+    foreach ($drive in @($DiskDrives | Where-Object { $_.Status -and $_.Status -ne 'OK' })) {
+        $score -= 25
+        $null = $notes.Add("Win32_DiskDrive reportou Status $($drive.Status) em $($drive.Model).")
+    }
+
+    foreach ($counter in @($Reliability)) {
+        if ($null -ne $counter.Wear -and $counter.Wear -ge 0 -and $counter.Wear -le 100) {
+            $lifeByWear = [math]::Max(0, 100 - [int]$counter.Wear)
+            $score = [math]::Min($score, $lifeByWear)
+            $null = $notes.Add("Contador de desgaste reportou $($counter.Wear)% usado em $($counter.FriendlyName).")
+        }
+
+        if ($null -ne $counter.Temperature -and $counter.Temperature -ge 60) {
+            $score -= 20
+            $null = $notes.Add("Temperatura elevada em $($counter.FriendlyName): $($counter.Temperature) graus C.")
+        }
+        elseif ($null -ne $counter.Temperature -and $counter.Temperature -ge 50) {
+            $score -= 10
+            $null = $notes.Add("Temperatura em atencao em $($counter.FriendlyName): $($counter.Temperature) graus C.")
+        }
+
+        $readErrors = if ($null -ne $counter.ReadErrorsTotal) { [int64]$counter.ReadErrorsTotal } else { 0 }
+        $writeErrors = if ($null -ne $counter.WriteErrorsTotal) { [int64]$counter.WriteErrorsTotal } else { 0 }
+        if (($readErrors + $writeErrors) -gt 0) {
+            $score -= 20
+            $null = $notes.Add("Contadores de confiabilidade indicam erros de leitura/escrita em $($counter.FriendlyName).")
+        }
+    }
+
+    if (@($Alerts).Count -gt 0) {
+        $score -= [math]::Min(30, @($Alerts).Count * 10)
+    }
+
+    $score = [math]::Max(0, [math]::Min(100, [int]$score))
+    $status = if ($score -ge 85) {
+        'Saudavel'
+    }
+    elseif ($score -ge 65) {
+        'Atencao'
+    }
+    elseif ($score -ge 40) {
+        'Degradado'
+    }
+    else {
+        'Critico'
+    }
+
+    if (@($Reliability).Count -eq 0) {
+        $null = $notes.Add('Contadores de confiabilidade nao foram expostos pelo Windows para este disco/controlador.')
+    }
+
+    return [pscustomobject]@{
+        ApproximateLifePercent = $score
+        Status = $status
+        Gauge = New-HD100GaugeText -Percent $score
+        Notes = @($notes)
+    }
+}
+
+function New-HD100GaugeText {
+    [CmdletBinding()]
+    param([Parameter(Mandatory = $true)][int]$Percent)
+
+    $value = [math]::Max(0, [math]::Min(100, $Percent))
+    $filled = [math]::Round($value / 10)
+    $empty = 10 - $filled
+    return '[{0}{1}] {2}%' -f ('#' * $filled), ('-' * $empty), $value
+}
+
+function Get-HD100RelevantDiskHealth {
+    [CmdletBinding()]
+    param(
+        [object[]]$PhysicalDisks,
+        [object[]]$DiskDrives,
+        [object[]]$Smart,
+        [object[]]$Reliability
+    )
+
+    $items = [System.Collections.ArrayList]::new()
+
+    foreach ($disk in @($PhysicalDisks)) {
+        $counter = @($Reliability | Where-Object { $_.FriendlyName -eq $disk.FriendlyName } | Select-Object -First 1)
+        $null = $items.Add([pscustomobject]@{
+            Nome = $disk.FriendlyName
+            Tipo = $disk.MediaType
+            Barramento = $disk.BusType
+            TamanhoGB = if ($disk.Size) { [math]::Round($disk.Size / 1GB, 2) } else { $null }
+            Saude = $disk.HealthStatus
+            Operacional = (@($disk.OperationalStatus) -join ', ')
+            DesgastePercentual = if ($counter) { $counter.Wear } else { $null }
+            TemperaturaC = if ($counter) { $counter.Temperature } else { $null }
+            ErrosLeitura = if ($counter) { $counter.ReadErrorsTotal } else { $null }
+            ErrosEscrita = if ($counter) { $counter.WriteErrorsTotal } else { $null }
+            Fonte = 'Get-PhysicalDisk'
+        })
+    }
+
+    if (@($items).Count -eq 0) {
+        foreach ($drive in @($DiskDrives)) {
+            $smartMatch = @($Smart | Where-Object { $_.InstanceName -match [regex]::Escape(($drive.Model -replace '\s+', ' ').Trim()) } | Select-Object -First 1)
+            $null = $items.Add([pscustomobject]@{
+                Nome = $drive.Model
+                Tipo = $drive.MediaType
+                Barramento = $drive.InterfaceType
+                TamanhoGB = if ($drive.Size) { [math]::Round($drive.Size / 1GB, 2) } else { $null }
+                Saude = $drive.Status
+                Operacional = $drive.Status
+                DesgastePercentual = $null
+                TemperaturaC = $null
+                ErrosLeitura = $null
+                ErrosEscrita = $null
+                PredictFailure = if ($smartMatch) { $smartMatch.PredictFailure } else { $null }
+                Fonte = 'Win32_DiskDrive'
+            })
+        }
+    }
+
+    return @($items)
+}
+
 function Get-HD100DiskHealth {
     [CmdletBinding()]
     param()
@@ -447,11 +697,13 @@ function Get-HD100DiskHealth {
     $disks = @()
     $diskDrives = @()
     $smart = @()
+    $reliability = @()
 
     try { $physicalDisks = @(Get-PhysicalDisk -ErrorAction Stop | Select-Object FriendlyName, MediaType, BusType, HealthStatus, OperationalStatus, Size) } catch { }
     try { $disks = @(Get-Disk -ErrorAction Stop | Select-Object Number, FriendlyName, BusType, HealthStatus, OperationalStatus, PartitionStyle, Size) } catch { }
     try { $diskDrives = @(Get-CimInstance Win32_DiskDrive -ErrorAction Stop | Select-Object Model, InterfaceType, MediaType, Status, Size, SerialNumber) } catch { }
     try { $smart = @(Get-CimInstance -Namespace root\wmi -Class MSStorageDriver_FailurePredictStatus -ErrorAction Stop | Select-Object InstanceName, PredictFailure, Reason) } catch { }
+    $reliability = Get-HD100ReliabilityCounters -PhysicalDisks $physicalDisks
 
     $alerts = [System.Collections.ArrayList]::new()
     foreach ($disk in $physicalDisks) {
@@ -475,11 +727,17 @@ function Get-HD100DiskHealth {
         }
     }
 
+    $summary = Get-HD100DiskHealthScore -PhysicalDisks $physicalDisks -Disks $disks -DiskDrives $diskDrives -Smart $smart -Reliability $reliability -Alerts $alerts
+    $relevantDisks = Get-HD100RelevantDiskHealth -PhysicalDisks $physicalDisks -DiskDrives $diskDrives -Smart $smart -Reliability $reliability
+
     [pscustomobject]@{
         PhysicalDisks = @($physicalDisks)
         Disks = @($disks)
         DiskDrives = @($diskDrives)
         Smart = @($smart)
+        Reliability = @($reliability)
+        RelevantDisks = @($relevantDisks)
+        Summary = $summary
         Alerts = @($alerts)
         Status = if (@($alerts).Count -gt 0) { 'Critico' } else { 'Normal' }
     }
@@ -952,6 +1210,25 @@ function Export-HD100ReportText {
     $diskAlert = @($Diagnostic.DiskHealth.Alerts).Count -gt 0
     $services = @($Diagnostic.Services | Where-Object { $_.Name -in @('WSearch', 'SysMain') -and $_.Status -eq 'Running' }).Name -join ', '
     if ([string]::IsNullOrWhiteSpace($services)) { $services = 'Nenhum destaque inicial' }
+    $healthSummary = $Diagnostic.DiskHealth.Summary
+    $healthGauge = if ($healthSummary) { $healthSummary.Gauge } else { '[----------] Inconclusivo' }
+    $healthStatus = if ($healthSummary) { $healthSummary.Status } else { $Diagnostic.DiskHealth.Status }
+    $healthNotes = @($Diagnostic.DiskHealth.Summary.Notes | Select-Object -First 6)
+    if (@($healthNotes).Count -eq 0) {
+        $healthNotes = @('Nenhum alerta direto de saude fisica foi reportado pelas fontes consultadas.')
+    }
+    $healthNoteText = @($healthNotes | ForEach-Object { "- $_" }) -join "`r`n"
+    $diskRows = @($Diagnostic.DiskHealth.RelevantDisks | Select-Object -First 8 | ForEach-Object {
+        $wearText = if ($null -ne $_.DesgastePercentual) { "$($_.DesgastePercentual)% usado" } else { 'Nao informado' }
+        $tempText = if ($null -ne $_.TemperaturaC) { "$($_.TemperaturaC) C" } else { 'Nao informada' }
+        $readErrors = if ($null -ne $_.ErrosLeitura) { $_.ErrosLeitura } else { 'N/I' }
+        $writeErrors = if ($null -ne $_.ErrosEscrita) { $_.ErrosEscrita } else { 'N/I' }
+
+        "Nome: $($_.Nome)`r`n  Tipo/Barramento: $($_.Tipo) / $($_.Barramento)`r`n  Tamanho: $($_.TamanhoGB) GB`r`n  Saude: $($_.Saude)`r`n  Operacional: $($_.Operacional)`r`n  Desgaste: $wearText`r`n  Temperatura: $tempText`r`n  Erros leitura/escrita: $readErrors / $writeErrors"
+    }) -join "`r`n`r`n"
+    if ([string]::IsNullOrWhiteSpace($diskRows)) {
+        $diskRows = 'Dados detalhados de disco nao disponiveis pelas fontes consultadas.'
+    }
 
     $status = if ($diskAlert -or $Diagnostic.DiskUsage.Status -eq 'Critico' -or $Diagnostic.Events.CriticalCount -gt 0) {
         'ATENCAO'
@@ -988,11 +1265,24 @@ Uso medio do disco:              $($Diagnostic.DiskUsage.DiskTimePercent)%
 Fila media de disco:             $($Diagnostic.DiskUsage.QueueLength)
 Processo principal de I/O:       $(if ($topProcess) { "$($topProcess.Name) ($($topProcess.IOTotalMB) MB)" } else { 'Inconclusivo' })
 Saude do disco:                  $($Diagnostic.DiskHealth.Status)
+Vida util aproximada:            $healthGauge
 Eventos criticos de disco:       $($Diagnostic.Events.CriticalCount)
 Espaco livre no ${systemDrive}:              $(if ($systemVolume) { "$($systemVolume.FreePercent)%" } else { 'Inconclusivo' })
 Integridade Windows:             DISM diagnostico executado; SFC reservado ao modo Assistido
 Servicos suspeitos:              $services
 Plugins bancarios:               $(if ($Diagnostic.BankPlugins.Detected) { 'Detectado' } else { 'Nao detectado' })
+
+------------------------------------------------------------
+ SAUDE DOS DISCOS
+------------------------------------------------------------
+Status aproximado:               $healthStatus
+Gauge de vida util:              $healthGauge
+
+Dados relevantes:
+$diskRows
+
+Observacoes:
+$healthNoteText
 
 ------------------------------------------------------------
  RECOMENDACAO
@@ -1007,13 +1297,34 @@ Diagnostico JSON: $($script:HD100Session.DiagnosticJsonPath)
 Logs:            $($script:HD100Session.LogsPath)
 "@
 
-    $report | Set-Content -LiteralPath $script:HD100Session.TextReportPath
+    Write-HD100TextFile -Path $script:HD100Session.TextReportPath -Content $report
     return $report
 }
 
 function Export-HD100ReportHtml {
     [CmdletBinding()]
     param([Parameter(Mandatory = $true)]$Diagnostic)
+
+    $healthSummary = $Diagnostic.DiskHealth.Summary
+    $healthPercent = if ($healthSummary -and $null -ne $healthSummary.ApproximateLifePercent) {
+        [int]$healthSummary.ApproximateLifePercent
+    }
+    else {
+        0
+    }
+    $healthStatus = if ($healthSummary) { $healthSummary.Status } else { $Diagnostic.DiskHealth.Status }
+    $healthColor = if ($healthPercent -ge 85) {
+        '#16a34a'
+    }
+    elseif ($healthPercent -ge 65) {
+        '#ca8a04'
+    }
+    elseif ($healthPercent -ge 40) {
+        '#ea580c'
+    }
+    else {
+        '#dc2626'
+    }
 
     $summaryRows = @(
         @('Computador', $Diagnostic.System.ComputerName),
@@ -1022,10 +1333,32 @@ function Export-HD100ReportHtml {
         @('Categoria provavel', $Diagnostic.Recommendation.Category),
         @('Uso medio de disco', "$($Diagnostic.DiskUsage.DiskTimePercent)%"),
         @('Saude do disco', $Diagnostic.DiskHealth.Status),
+        @('Vida util aproximada', "$(if ($healthSummary) { $healthSummary.ApproximateLifePercent } else { 'N/I' })%"),
         @('Eventos criticos', $Diagnostic.Events.CriticalCount)
     ) | ForEach-Object {
         '<tr class="border-b border-gray-200"><td class="py-2 px-3 font-medium">{0}</td><td class="py-2 px-3">{1}</td></tr>' -f
             (ConvertTo-HtmlSafe -Value $_[0]), (ConvertTo-HtmlSafe -Value $_[1])
+    }
+
+    $diskRows = @($Diagnostic.DiskHealth.RelevantDisks | Select-Object -First 8 | ForEach-Object {
+        '<tr class="border-b border-gray-200 break-inside-avoid"><td class="py-2 px-3 font-medium">{0}</td><td class="py-2 px-3">{1}</td><td class="py-2 px-3">{2}</td><td class="py-2 px-3 text-right">{3}</td><td class="py-2 px-3">{4}</td><td class="py-2 px-3 text-right">{5}</td><td class="py-2 px-3 text-right">{6}</td></tr>' -f
+            (ConvertTo-HtmlSafe -Value $_.Nome),
+            (ConvertTo-HtmlSafe -Value $_.Tipo),
+            (ConvertTo-HtmlSafe -Value $_.Barramento),
+            (ConvertTo-HtmlSafe -Value $_.TamanhoGB),
+            (ConvertTo-HtmlSafe -Value $_.Saude),
+            (ConvertTo-HtmlSafe -Value $(if ($null -ne $_.DesgastePercentual) { "$($_.DesgastePercentual)%" } else { 'N/I' })),
+            (ConvertTo-HtmlSafe -Value $(if ($null -ne $_.TemperaturaC) { "$($_.TemperaturaC) C" } else { 'N/I' }))
+    }) -join "`r`n"
+    if ([string]::IsNullOrWhiteSpace($diskRows)) {
+        $diskRows = '<tr><td colspan="7" class="py-3 px-4 text-gray-500">Dados detalhados de disco nao disponiveis.</td></tr>'
+    }
+
+    $healthNotes = @($Diagnostic.DiskHealth.Summary.Notes | Select-Object -First 6 | ForEach-Object {
+        '<li>{0}</li>' -f (ConvertTo-HtmlSafe -Value $_)
+    }) -join "`r`n"
+    if ([string]::IsNullOrWhiteSpace($healthNotes)) {
+        $healthNotes = '<li>Nenhum alerta direto de saude fisica foi reportado pelas fontes consultadas.</li>'
     }
 
     $topRows = @($Diagnostic.TopIOProcesses | Select-Object -First 10 | ForEach-Object {
@@ -1078,6 +1411,26 @@ function Export-HD100ReportHtml {
                     $($summaryRows -join "`r`n")
                 </tbody>
             </table>
+
+            <h2 class="text-xl font-bold mb-3">Saude dos discos</h2>
+            <div class="mb-4 border border-gray-200 rounded p-4 break-inside-avoid">
+                <div class="flex justify-between items-end mb-2">
+                    <div>
+                        <p class="text-sm text-gray-500">Vida util aproximada</p>
+                        <p class="text-2xl font-bold text-gray-900">$healthPercent%</p>
+                    </div>
+                    <p class="font-semibold" style="color: $healthColor">$((ConvertTo-HtmlSafe -Value $healthStatus))</p>
+                </div>
+                <div class="w-full h-4 bg-gray-200 rounded overflow-hidden">
+                    <div class="h-4" style="width: $healthPercent%; background-color: $healthColor"></div>
+                </div>
+                <p class="text-xs text-gray-500 mt-2">Estimativa baseada nos dados que o Windows expôs: SMART, HealthStatus, Status CIM e contadores de confiabilidade.</p>
+            </div>
+            <table class="w-full text-left border-collapse mb-4">
+                <thead><tr class="bg-gray-100 text-gray-700 uppercase text-sm border-b-2 border-gray-300"><th class="py-3 px-4">Disco</th><th class="py-3 px-4">Tipo</th><th class="py-3 px-4">Barramento</th><th class="py-3 px-4 text-right">GB</th><th class="py-3 px-4">Saude</th><th class="py-3 px-4 text-right">Desgaste</th><th class="py-3 px-4 text-right">Temp.</th></tr></thead>
+                <tbody>$diskRows</tbody>
+            </table>
+            <ul class="list-disc pl-6 mb-8 text-sm text-gray-600">$healthNotes</ul>
 
             <h2 class="text-xl font-bold mb-3">Top processos por I/O</h2>
             <table class="w-full text-left border-collapse mb-8">
