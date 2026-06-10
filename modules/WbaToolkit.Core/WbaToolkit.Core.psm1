@@ -21,5 +21,6 @@ Export-ModuleMember -Function @(
     'Write-Section',
     'Read-YesNo',
     'Invoke-ExternalCommand',
-    'ConvertTo-HtmlSafe'
+    'ConvertTo-HtmlSafe',
+    'Export-ToolkitFunctionDocs'
 )

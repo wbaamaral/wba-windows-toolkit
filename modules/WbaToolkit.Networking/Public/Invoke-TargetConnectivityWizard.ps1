@@ -6,6 +6,8 @@
     [CmdletBinding()]
     param()
 
+    # WBA-DOCS: Category=Networking; Related=Invoke-TargetConnectivityTest,Show-ConnectivityReport; Manual=Wizard interativo para teste direcionado
+
     Write-Host ''
     Write-Host 'WBA Target Connectivity Tester' -ForegroundColor Cyan
 

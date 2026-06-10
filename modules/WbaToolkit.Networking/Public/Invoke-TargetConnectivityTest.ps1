@@ -51,6 +51,8 @@
         [int]$MaxPorts = 1024
     )
 
+    # WBA-DOCS: Category=Networking; Related=Show-ConnectivityReport,Export-ConnectivityReport; Manual=Teste direcionado por alvo, protocolo e portas
+
     $startedAt = Get-Date
     $context = Get-NetworkContext
     $results = [System.Collections.ArrayList]::new()
