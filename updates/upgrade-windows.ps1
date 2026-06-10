@@ -117,9 +117,9 @@ Import-Module $ToolkitModulePath -Force -ErrorAction Stop
 $ScriptVersion = "v1.0-update-basico"
 $ErrorActionPreference = "Continue"
 
-$ReportSession = Initialize-ToolkitReportSession -ReportsRoot $DiretorioSaida -ModuleName 'Updates'
-$LogDir = $ReportSession.LogsPath
-$LogFile = Join-Path $LogDir "$((Get-Date).ToString('yyyy-MM-dd_HHmmss'))-upgrade-windows.log"
+$ReportSession = $null
+$LogDir = $null
+$LogFile = $null
 
 $ScriptName = if ($MyInvocation.MyCommand.Name) {
     $MyInvocation.MyCommand.Name
@@ -250,6 +250,10 @@ if (-not (Test-IsAdministrator)) {
     Start-Process powershell.exe -ArgumentList $allArgs -Verb RunAs
     exit
 }
+
+$ReportSession = Initialize-ToolkitReportSession -ReportsRoot $DiretorioSaida -ModuleName 'Updates'
+$LogDir = $ReportSession.LogsPath
+$LogFile = Join-Path $LogDir "$((Get-Date).ToString('yyyy-MM-dd_HHmmss'))-upgrade-windows.log"
 
 if (!(Test-Path $LogDir)) {
     New-Item -ItemType Directory -Path $LogDir -Force | Out-Null

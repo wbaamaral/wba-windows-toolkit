@@ -137,6 +137,44 @@ Describe 'WbaToolkit.Core' {
             }
         }
 
+        It 'Deve tratar ReportsRoot vazio como ausente e usar configuracao persistente' {
+            $tempDir = Join-Path ([System.IO.Path]::GetTempPath()) ('wba-config-' + [guid]::NewGuid().ToString())
+            $configPath = Join-Path $tempDir 'config.json'
+            $reportsRoot = Join-Path ([System.IO.Path]::GetTempPath()) ('wba-reports-' + [guid]::NewGuid().ToString())
+
+            try {
+                Set-ToolkitReportsRoot -Path $reportsRoot -ConfigPath $configPath | Out-Null
+                Get-ToolkitReportsRoot -Path '' -ConfigPath $configPath | Should -Be $reportsRoot
+            }
+            finally {
+                if (Test-Path -LiteralPath $tempDir) {
+                    Remove-Item -LiteralPath $tempDir -Recurse -Force
+                }
+            }
+        }
+
+        It 'Deve criar sessao usando ReportsRoot persistente quando ReportsRoot nao for informado' {
+            $tempDir = Join-Path ([System.IO.Path]::GetTempPath()) ('wba-config-' + [guid]::NewGuid().ToString())
+            $configPath = Join-Path $tempDir 'config.json'
+            $reportsRoot = Join-Path ([System.IO.Path]::GetTempPath()) ('wba-reports-' + [guid]::NewGuid().ToString())
+
+            try {
+                Set-ToolkitReportsRoot -Path $reportsRoot -ConfigPath $configPath | Out-Null
+                $session = Initialize-ToolkitReportSession -ModuleName 'Inventory' -ExecutionName '2026-06-10_110000' -ConfigPath $configPath
+                $session.Path | Should -Be (Join-Path (Join-Path $reportsRoot 'Inventory') '2026-06-10_110000')
+                Test-Path -LiteralPath $session.LogsPath | Should -BeTrue
+                Test-Path -LiteralPath $session.BackupsPath | Should -BeTrue
+            }
+            finally {
+                if (Test-Path -LiteralPath $reportsRoot) {
+                    Remove-Item -LiteralPath $reportsRoot -Recurse -Force
+                }
+                if (Test-Path -LiteralPath $tempDir) {
+                    Remove-Item -LiteralPath $tempDir -Recurse -Force
+                }
+            }
+        }
+
         It 'Deve criar sessao com agrupamento por modulo e timestamp' {
             $reportsRoot = Join-Path ([System.IO.Path]::GetTempPath()) ('wba-reports-' + [guid]::NewGuid().ToString())
 
