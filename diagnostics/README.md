@@ -6,6 +6,54 @@ Scripts de diagnóstico de conectividade e saúde do ambiente de rede. Executam 
 
 ## Scripts
 
+### `Diagnostico-Driver-Grafico.ps1`
+
+**Função:** Coleta evidências de travamentos gráficos, tela preta, falhas do DWM, TDR, WHEA, Kernel-Power e erros
+relacionados a driver de vídeo.
+
+**Principais ações:**
+
+| Etapa | O que verifica |
+|---|---|
+| GPU e driver | Controladores de vídeo, versão/data do driver, assinatura e INF |
+| Monitores | Monitores detectados, fabricante, serial e estado ativo |
+| Eventos | Logs System/Application com Display, DWM, DirectX, WHEA, BugCheck e Kernel-Power |
+| Processos | Processos ligados a aceleração gráfica, como DWM, Explorer, navegadores, Teams e WebView2 |
+| Energia | Plano ativo, estados de suspensão e inicialização rápida |
+| TDR | Chaves de registro em `GraphicsDrivers` usadas em diagnóstico de travamentos de vídeo |
+| Evidências | TXT, JSON, HTML opcional, DXDiag opcional e exportação EVTX opcional |
+
+**Parâmetros:**
+
+| Parâmetro | Descrição |
+|---|---|
+| `-Modo` | `Diagnostico` ou `Assistido`; o modo assistido ativa HTML, DXDiag e EVTX |
+| `-Dias` | Janela retroativa de eventos, padrão 7 dias |
+| `-MaxEventos` | Limite de eventos lidos antes do filtro local |
+| `-GerarHtml` | Gera relatório HTML local/autocontido |
+| `-ExportarEvtx` | Exporta logs `System.evtx` e `Application.evtx` para `logs` |
+| `-ColetarDxDiag` | Executa `dxdiag /t` e salva em `logs\dxdiag.txt` |
+| `-AbrirRelatorio` | Abre o relatório gerado ao final |
+| `-DiretorioSaida` | Raiz de relatórios; o script cria `Diagnostics\<timestamp>` |
+
+**Uso básico:**
+
+```powershell
+# Diagnóstico seguro, sem alterações no sistema
+.\Diagnostico-Driver-Grafico.ps1
+
+# Diagnóstico com relatório HTML
+.\Diagnostico-Driver-Grafico.ps1 -GerarHtml
+
+# Coleta assistida com HTML, DXDiag e EVTX
+.\Diagnostico-Driver-Grafico.ps1 -Modo Assistido
+```
+
+**Saída:** `C:\WBA\Relatorios\Diagnostics\<timestamp>\` ou `<DiretorioSaida>\Diagnostics\<timestamp>\`.
+
+**Requisitos:** Windows 10/11. PowerShell 5.1+. Executar como administrador é recomendado para acesso completo a
+eventos e inventário de dispositivos.
+
 ### `Testar-conectividade-internet.ps1`
 
 **Função:** Invólucro operacional do módulo `WbaToolkit.Networking` para diagnóstico completo e sequencial de
