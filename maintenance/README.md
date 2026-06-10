@@ -6,6 +6,61 @@ Scripts de manutenção preventiva e corretiva do sistema operacional Windows. F
 
 ## Scripts
 
+### `Diagnostico-Reparo-HD100.ps1`
+
+**Função:** Diagnóstico técnico assistido para investigar o sintoma de disco em 100% no Windows 10/11.
+
+**Versão inicial:** foco em diagnóstico seguro, coleta de evidências e geração de relatório. No modo `Diagnostico`,
+o script não aplica correções permanentes; ações de reparo ficam reservadas ao modo `Assistido`.
+
+**Principais ações:**
+
+| Etapa | Ação |
+|---|---|
+| Sistema | Coleta versão do Windows, equipamento, memória, uptime e plano de energia |
+| Disco | Mede uso do disco, fila média e latência por contadores quando disponíveis |
+| Processos | Lista processos com maior I/O acumulado |
+| Saúde | Consulta `Get-PhysicalDisk`, `Get-Disk`, `Win32_DiskDrive` e SMART quando disponível |
+| Eventos | Consulta eventos recentes de `Disk`, `Ntfs`, `storahci`, `iaStor`, `volmgr`, `partmgr` e similares |
+| CHKDSK | Executa `chkdsk <unidade> /scan` no modo diagnóstico |
+| DISM | Executa `CheckHealth` e `ScanHealth` no modo diagnóstico |
+| SFC | Executa `sfc /scannow` apenas no modo assistido |
+| Aplicativos | Detecta indícios de plugins bancários, antivírus, OneDrive, navegadores e Adobe Reader |
+| Relatórios | Gera TXT e JSON; HTML opcional |
+
+**Parâmetros:**
+
+| Parâmetro | Padrão | Descrição |
+|---|---|---|
+| `-Modo` | `Diagnostico` | `Diagnostico` \| `Assistido` \| `Relatorio` \| `Rollback` |
+| `-DryRun` | — | Simula comandos externos como CHKDSK, DISM e SFC |
+| `-GerarHtml` | — | Gera relatório HTML além de TXT/JSON |
+| `-GerarJson` | — | Mantido por compatibilidade; JSON é gerado por padrão |
+| `-AgendarChkdsk` | — | No modo assistido, oferece agendamento de `chkdsk /r` com confirmação textual |
+| `-CriarPontoRestauracao` | — | Reservado para evolução do modo assistido |
+| `-DiretorioSaida` | `C:\WBA\Relatorios\HD100` | Diretório base das execuções |
+
+**Uso básico:**
+
+```powershell
+# Diagnóstico seguro
+.\Diagnostico-Reparo-HD100.ps1
+
+# Diagnóstico com relatório HTML
+.\Diagnostico-Reparo-HD100.ps1 -GerarHtml
+
+# Simular sem executar CHKDSK/DISM/SFC
+.\Diagnostico-Reparo-HD100.ps1 -DryRun
+
+# Modo assistido
+.\Diagnostico-Reparo-HD100.ps1 -Modo Assistido -GerarHtml
+
+# Regerar relatório da execução mais recente
+.\Diagnostico-Reparo-HD100.ps1 -Modo Relatorio -GerarHtml
+```
+
+**Saída:** `C:\WBA\Relatorios\HD100\<timestamp>\`
+
 ### `limpeza-windows.ps1`
 
 **Função:** Limpeza segura, manutenção e otimização conservadora para Windows 10 Pro.

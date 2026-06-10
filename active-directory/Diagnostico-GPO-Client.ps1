@@ -189,7 +189,7 @@ foreach ($share in @('SYSVOL', 'NETLOGON')) {
         Add-Result "Share $share" 'OK' $sharePath
 
         $gpoCount = (Get-ChildItem $sharePath -Recurse -ErrorAction SilentlyContinue | Measure-Object).Count
-        Write-Info "  Itens em $share: $gpoCount"
+        Write-Info "  Itens em ${share}: $gpoCount"
     } else {
         Write-Fail "Sem acesso: $sharePath — GPOs nao serao aplicadas"
         Add-Result "Share $share" 'FALHA' "Caminho inacessivel: $sharePath"

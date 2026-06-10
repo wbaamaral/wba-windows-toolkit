@@ -119,6 +119,7 @@ Describe 'WbaToolkit.Core' {
             [System.IO.Path]::IsPathRooted($result.Path) | Should -BeTrue
             Test-Path -LiteralPath (Join-Path $outputPath 'functions/Export-ToolkitFunctionDocs.html') | Should -BeTrue
             Test-Path -LiteralPath (Join-Path $outputPath 'functions/Get-StaticDocsMetadata.html') | Should -BeFalse
+            Test-Path -LiteralPath (Join-Path $outputPath 'scripts/Diagnostico-Reparo-HD100.ps1.html') | Should -BeTrue
             Test-Path -LiteralPath (Join-Path $outputPath 'scripts/limpeza-windows.ps1.html') | Should -BeTrue
             $result.ScriptCount | Should -BeGreaterThan 0
 
@@ -126,6 +127,7 @@ Describe 'WbaToolkit.Core' {
             $content | Should -Match 'Manual de Funcoes'
             $content | Should -Match 'Export-ToolkitFunctionDocs'
             $content | Should -Match 'Indice de scripts'
+            $content | Should -Match 'Diagnostico-Reparo-HD100.ps1'
             $content | Should -Match 'limpeza-windows.ps1'
 
             $functionContent = Get-Content -LiteralPath (Join-Path $outputPath 'functions/Export-ToolkitFunctionDocs.html') -Raw
