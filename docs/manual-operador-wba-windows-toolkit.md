@@ -590,13 +590,13 @@ Automação conservadora:
 O script cria log em:
 
 ```text
-C:\ti
+C:\WBA\Relatorios\Maintenance\<timestamp>\logs
 ```
 
 O nome costuma seguir o formato:
 
 ```text
-yyyy-MM-dd_HH-mm-ss-limpeza-windows.log
+yyyy-MM-dd_HHmmss-limpeza-windows.log
 ```
 
 ### 7.8. Cuidados operacionais
@@ -680,13 +680,13 @@ Manter janela aberta:
 O log fica em:
 
 ```text
-C:\ti
+C:\WBA\Relatorios\Updates\<timestamp>\logs
 ```
 
 Nome esperado:
 
 ```text
-yyyy-MM-dd_HH-mm-ss-upgrade-windows.log
+yyyy-MM-dd_HHmmss-upgrade-windows.log
 ```
 
 ### 8.7. Como acompanhar o Windows Update
@@ -743,7 +743,7 @@ Configurações > Windows Update
 .\maintenance\limpeza-windows.ps1 -NoReboot
 ```
 
-2. Verificar o log em `C:\ti`.
+2. Verificar o log em `C:\WBA\Relatorios\Maintenance\<timestamp>\logs`.
 3. Confirmar espaço livre depois da execução.
 
 ### 9.3. Quando o problema é sistema desatualizado

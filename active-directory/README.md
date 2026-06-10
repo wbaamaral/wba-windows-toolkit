@@ -32,6 +32,7 @@ Scripts de diagnóstico e reparo de problemas em ambientes Active Directory. Foc
 | `-DomainFQDN` | FQDN do domínio (auto-detectado se omitido) |
 | `-DCName` | Nome ou IP do DC preferencial (auto-detectado se omitido) |
 | `-SkipReparo` | Executa apenas leitura; não oferece ações de reparo |
+| `-DiretorioSaida` | Raiz de relatórios; o script cria `ActiveDirectory\<timestamp>` |
 
 **Uso básico:**
 
@@ -47,6 +48,8 @@ Scripts de diagnóstico e reparo de problemas em ambientes Active Directory. Foc
 ```
 
 **Requisitos:** Administrador local. Máquina ingressada no domínio. PowerShell 5.1+.
+
+**Saída:** `C:\WBA\Relatorios\ActiveDirectory\<timestamp>\GPOResult-<timestamp>.html` e `logs\DiagGPO-<timestamp>.log`, ou `<DiretorioSaida>\ActiveDirectory\<timestamp>\...`
 
 ---
 
@@ -79,6 +82,7 @@ Scripts de diagnóstico e reparo de problemas em ambientes Active Directory. Foc
 | `-PreferredDc` | IP ou FQDN do DC preferencial para os testes |
 | `-DnsServers` | Array de servidores DNS a serem testados |
 | `-NoTranscript` | Não cria arquivo de log de transcrição |
+| `-DiretorioSaida` | Raiz de relatórios; o script cria `ActiveDirectory\<timestamp>\logs` |
 
 **Uso básico:**
 
@@ -97,4 +101,4 @@ Scripts de diagnóstico e reparo de problemas em ambientes Active Directory. Foc
 
 **Requisitos:** Administrador local. Máquina ingressada no domínio. Credenciais de domínio com permissão de reset de conta de máquina para reparo. PowerShell 5.1+.
 
-**Log:** `C:\ti\<timestamp>-Testa-Repara-ContaMaquinaAD.log`
+**Log:** `C:\WBA\Relatorios\ActiveDirectory\<timestamp>\logs\AD-MachineAccount-Repair-<timestamp>.log` ou `<DiretorioSaida>\ActiveDirectory\<timestamp>\logs\...`

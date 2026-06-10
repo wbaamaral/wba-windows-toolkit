@@ -23,7 +23,7 @@
     - Propaga todas as configuracoes para conta do sistema e perfil de novos usuarios.
     - Configura fuso horario (padrao UTC-4; parametrizavel para qualquer fuso do Brasil).
     - Suporte a modo silencioso para automacao via GPO, SCCM ou scripts de implantacao.
-    - Salva log completo em C:\ti.
+    - Salva log completo na pasta padronizada de relatorios do toolkit.
 
 .USO
     Execucao padrao (interativa, UTC-4):
@@ -58,7 +58,9 @@ param (
     [switch]$NoReboot,
     [switch]$Silent,
 
-    [string]$TimeZone = "SA Western Standard Time"
+    [string]$TimeZone = "SA Western Standard Time",
+
+    [string]$DiretorioSaida
 )
 
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
@@ -77,8 +79,9 @@ Import-Module $ToolkitModulePath -Force -ErrorAction Stop
 
 $ScriptVersion = "v1.0"
 $ScriptName    = $MyInvocation.MyCommand.Name
-$LogDir        = "C:\ti"
-$LogFile       = Join-Path $LogDir "$((Get-Date).ToString('yyyy-MM-dd_HH-mm-ss'))-$([System.IO.Path]::GetFileNameWithoutExtension($ScriptName)).log"
+$ReportSession = Initialize-ToolkitReportSession -ReportsRoot $DiretorioSaida -ModuleName 'Configuration'
+$LogDir        = $ReportSession.LogsPath
+$LogFile       = Join-Path $LogDir "$((Get-Date).ToString('yyyy-MM-dd_HHmmss'))-$([System.IO.Path]::GetFileNameWithoutExtension($ScriptName)).log"
 
 # Fusos horarios brasileiros com ID Windows, offset UTC e regioes principais
 $BrazilTimeZones = [ordered]@{
@@ -108,6 +111,7 @@ function Show-Help {
     Write-Host "  -TimeZone '<id>'      ID do fuso horario Windows (padrao: SA Western Standard Time / UTC-4)"
     Write-Host "  -Silent               Modo silencioso: sem prompts de confirmacao"
     Write-Host "  -NoReboot             Nao reinicia ao final"
+    Write-Host "  -DiretorioSaida <dir> Raiz de relatorios. Padrao: configuracao global ou C:\WBA\Relatorios"
     Write-Host ""
     Write-Host "Exemplos:"
     Write-Host "  .\$ScriptName"

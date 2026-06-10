@@ -2,6 +2,19 @@
     <#
     .SYNOPSIS
         Exporta o relatório de conectividade para HTML.
+
+    .DESCRIPTION
+        Quando Path nao e informado, cria uma sessao padronizada em Networking\<timestamp> usando OutputPath,
+        ReportsRoot persistente ou C:\WBA\Relatorios.
+
+    .PARAMETER Report
+        Objeto de relatorio gerado pelo teste de conectividade.
+
+    .PARAMETER Path
+        Caminho legado para arquivo HTML ou diretorio existente.
+
+    .PARAMETER OutputPath
+        Raiz de relatorios escolhida pelo usuario. O arquivo sera criado em Networking\<timestamp>.
     #>
     [CmdletBinding()]
     param(
@@ -10,11 +23,25 @@
         [object]$Report,
 
         [Parameter(Mandatory = $false)]
-        [string]$Path = (Get-Location).Path
+        [string]$Path,
+
+        [Parameter(Mandatory = $false)]
+        [string]$OutputPath
     )
 
+    if ([string]::IsNullOrWhiteSpace($Path)) {
+        if ([string]::IsNullOrWhiteSpace($OutputPath)) {
+            $session = Initialize-ToolkitReportSession -ModuleName 'Networking'
+        }
+        else {
+            $session = Initialize-ToolkitReportSession -ReportsRoot $OutputPath -ModuleName 'Networking'
+        }
+
+        $Path = $session.Path
+    }
+
     if (Test-Path -LiteralPath $Path -PathType Container) {
-        $fileName = 'Connectivity-{0}.html' -f $Report.ReportId
+        $fileName = 'relatorio-conectividade-{0}.html' -f $Report.ReportId
         $Path = Join-Path $Path $fileName
     }
 

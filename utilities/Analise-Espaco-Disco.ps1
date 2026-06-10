@@ -22,8 +22,8 @@
       Windows.old, hiberfil.sys, lixeira, cache de browsers, WinSxS.
     - Top 20 pastas por tamanho total com barra visual proporcional.
     - Top 10 arquivos por tamanho individual.
-    - Relatorio HTML salvo em C:\ti com conversao opcional para PDF.
-    - Log completo da execucao em C:\ti.
+    - Relatorio HTML salvo na pasta padronizada do toolkit com conversao opcional para PDF.
+    - Log completo da execucao em logs da sessao.
 
 .USO
     Varrer todos os volumes locais:
@@ -47,7 +47,7 @@ param (
     [switch]$Help,
     [switch]$Version,
     [string[]]$Drive,
-    [string]$OutputDir = "C:\ti",
+    [string]$OutputDir,
     [switch]$NaoPDF,
     [switch]$Silent
 )
@@ -66,8 +66,9 @@ Import-Module $ToolkitModulePath -Force -ErrorAction Stop
 
 $ScriptVersion = "v1.0"
 $ScriptName    = $MyInvocation.MyCommand.Name
-$LogDir        = $OutputDir
-$LogFile       = Join-Path $LogDir "$((Get-Date).ToString('yyyy-MM-dd_HH-mm-ss'))-$([System.IO.Path]::GetFileNameWithoutExtension($ScriptName)).log"
+$ReportSession = $null
+$LogDir        = $null
+$LogFile       = $null
 
 # ---------------------------------------------------------------------------
 # Utilitários
@@ -80,7 +81,7 @@ function Show-Help {
     Write-Host "Uso:  .\$ScriptName [opcoes]"
     Write-Host ""
     Write-Host "  -Drive '<letra>'   Volume a varrer (ex: C). Padrao: todos os locais fixos."
-    Write-Host "  -OutputDir '<dir>' Diretorio de saida do relatorio. Padrao: C:\ti"
+    Write-Host "  -OutputDir '<dir>' Raiz de relatorios. Padrao: ReportsRoot persistente ou C:\WBA\Relatorios"
     Write-Host "  -NaoPDF            Gera apenas HTML sem converter para PDF."
     Write-Host "  -Silent            Sem saida de progresso no console."
     Write-Host "  -Help              Esta ajuda."
@@ -561,6 +562,11 @@ if (-not (Test-IsAdministrator)) {
     exit
 }
 
+$ReportSession = Initialize-ToolkitReportSession -ReportsRoot $OutputDir -ModuleName 'Utilities'
+$OutputDir     = $ReportSession.Path
+$LogDir        = $ReportSession.LogsPath
+$LogFile       = Join-Path $LogDir "$((Get-Date).ToString('yyyy-MM-dd_HHmmss'))-$([System.IO.Path]::GetFileNameWithoutExtension($ScriptName)).log"
+
 if (!(Test-Path $OutputDir)) { New-Item -ItemType Directory -Path $OutputDir -Force | Out-Null }
 
 $transcriptActive = $false
@@ -620,7 +626,7 @@ foreach ($scan in $allScans) {
 
 # Relatorio HTML
 $ts       = (Get-Date).ToString('yyyy-MM-dd_HH-mm-ss')
-$htmlFile = Join-Path $OutputDir "$ts-Analise-Espaco-Disco.html"
+$htmlFile = Join-Path $OutputDir "$ts-relatorio-analise-espaco-disco.html"
 $pdfFile  = $htmlFile -replace '\.html$','.pdf'
 $dateStr  = (Get-Date).ToString('dd/MM/yyyy HH:mm')
 

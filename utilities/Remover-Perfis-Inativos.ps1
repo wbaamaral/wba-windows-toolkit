@@ -21,7 +21,7 @@
     - Confirmacao obrigatoria antes de qualquer remocao.
     - Modo silencioso para automacao: remove orfaos/inativos sem interacao.
     - Flag -DryRun para simular remocao sem alterar o sistema.
-    - Log completo em C:\ti.
+    - Log completo na pasta padronizada de relatorios do toolkit.
 
 .USO
     Modo interativo (padrao):
@@ -55,7 +55,9 @@ param (
 
     [int]$InactiveDays = 90,
 
-    [string[]]$ExcludeProfile = @()
+    [string[]]$ExcludeProfile = @(),
+
+    [string]$DiretorioSaida
 )
 
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
@@ -74,8 +76,14 @@ Import-Module $ToolkitModulePath -Force -ErrorAction Stop
 
 $ScriptVersion = "v1.0"
 $ScriptName    = $MyInvocation.MyCommand.Name
-$LogDir        = "C:\ti"
-$LogFile       = Join-Path $LogDir "$((Get-Date).ToString('yyyy-MM-dd_HH-mm-ss'))-$([System.IO.Path]::GetFileNameWithoutExtension($ScriptName)).log"
+$ReportSession = if ($NoLog) {
+    $null
+}
+else {
+    Initialize-ToolkitReportSession -ReportsRoot $DiretorioSaida -ModuleName 'Utilities'
+}
+$LogDir        = if ($ReportSession) { $ReportSession.LogsPath } else { $null }
+$LogFile       = if ($LogDir) { Join-Path $LogDir "$((Get-Date).ToString('yyyy-MM-dd_HHmmss'))-$([System.IO.Path]::GetFileNameWithoutExtension($ScriptName)).log" } else { $null }
 
 $SystemFolders = @(
     'systemprofile', 'LocalService', 'NetworkService',
@@ -101,6 +109,7 @@ function Show-Help {
     Write-Host "  -NoLog                        Nao cria arquivo de log"
     Write-Host "  -InactiveDays <N>             Limiar de inatividade em dias (padrao: 90)"
     Write-Host "  -ExcludeProfile '<n>','<n>'   Nomes de perfis a ignorar na listagem"
+    Write-Host "  -DiretorioSaida <dir>         Raiz de relatorios. Padrao: configuracao global ou C:\WBA\Relatorios"
     Write-Host ""
     Write-Host "Exemplos:"
     Write-Host "  .\$ScriptName"
@@ -522,9 +531,9 @@ if (-not (Test-IsAdministrator)) {
     exit
 }
 
-if (!(Test-Path $LogDir)) { New-Item -ItemType Directory -Path $LogDir -Force | Out-Null }
 $transcriptActive = $false
 if (-not $NoLog) {
+    if (!(Test-Path $LogDir)) { New-Item -ItemType Directory -Path $LogDir -Force | Out-Null }
     try {
         Start-Transcript -Path $LogFile -Encoding UTF8 -ErrorAction Stop
         $transcriptActive = $true

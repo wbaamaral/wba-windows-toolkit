@@ -61,6 +61,12 @@ Describe 'WbaToolkit.Core' {
         It 'Deve exportar Export-ToolkitFunctionDocs' {
             (Get-Command Export-ToolkitFunctionDocs -ErrorAction Stop).CommandType | Should -Be 'Function'
         }
+
+        It 'Deve exportar funcoes de padronizacao de relatorios' {
+            (Get-Command Get-ToolkitReportsRoot -ErrorAction Stop).CommandType | Should -Be 'Function'
+            (Get-Command Set-ToolkitReportsRoot -ErrorAction Stop).CommandType | Should -Be 'Function'
+            (Get-Command Initialize-ToolkitReportSession -ErrorAction Stop).CommandType | Should -Be 'Function'
+        }
     }
 
     Context 'Formatacao de tamanho' {
@@ -104,6 +110,47 @@ Describe 'WbaToolkit.Core' {
     Context 'Elevacao' {
         It 'Deve retornar valor booleano' {
             Test-IsAdministrator | Should -BeOfType [bool]
+        }
+    }
+
+    Context 'Saida padronizada de relatorios' {
+        It 'Deve usar caminho informado pelo usuario com prioridade' {
+            $configPath = Join-Path ([System.IO.Path]::GetTempPath()) ('wba-config-' + [guid]::NewGuid().ToString() + '.json')
+            $userPath = Join-Path ([System.IO.Path]::GetTempPath()) ('wba-reports-' + [guid]::NewGuid().ToString())
+
+            Get-ToolkitReportsRoot -Path $userPath -ConfigPath $configPath | Should -Be $userPath
+        }
+
+        It 'Deve usar ReportsRoot persistente quando parametro nao for informado' {
+            $tempDir = Join-Path ([System.IO.Path]::GetTempPath()) ('wba-config-' + [guid]::NewGuid().ToString())
+            $configPath = Join-Path $tempDir 'config.json'
+            $reportsRoot = Join-Path ([System.IO.Path]::GetTempPath()) ('wba-reports-' + [guid]::NewGuid().ToString())
+
+            try {
+                Set-ToolkitReportsRoot -Path $reportsRoot -ConfigPath $configPath | Out-Null
+                Get-ToolkitReportsRoot -ConfigPath $configPath | Should -Be $reportsRoot
+            }
+            finally {
+                if (Test-Path -LiteralPath $tempDir) {
+                    Remove-Item -LiteralPath $tempDir -Recurse -Force
+                }
+            }
+        }
+
+        It 'Deve criar sessao com agrupamento por modulo e timestamp' {
+            $reportsRoot = Join-Path ([System.IO.Path]::GetTempPath()) ('wba-reports-' + [guid]::NewGuid().ToString())
+
+            try {
+                $session = Initialize-ToolkitReportSession -ReportsRoot $reportsRoot -ModuleName 'HD100' -ExecutionName '2026-06-10_103000'
+                $session.Path | Should -Be (Join-Path (Join-Path $reportsRoot 'HD100') '2026-06-10_103000')
+                Test-Path -LiteralPath $session.LogsPath | Should -BeTrue
+                Test-Path -LiteralPath $session.BackupsPath | Should -BeTrue
+            }
+            finally {
+                if (Test-Path -LiteralPath $reportsRoot) {
+                    Remove-Item -LiteralPath $reportsRoot -Recurse -Force
+                }
+            }
         }
     }
 

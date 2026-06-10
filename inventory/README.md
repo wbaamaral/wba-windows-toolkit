@@ -35,13 +35,13 @@ Scripts de inventário de hardware e software. Coletam informações detalhadas 
 
 | Parâmetro | Padrão | Descrição |
 |---|---|---|
-| `-OutputDir` | `C:\TI` | Diretório de destino do relatório gerado |
+| `-OutputDir` | `ReportsRoot` ou `C:\WBA\Relatorios` | Raiz de relatórios; o script cria `Inventory\<timestamp>` |
 | `-NaoPDF` | — | Gera apenas HTML, sem tentar converter para PDF |
 
 **Uso básico:**
 
 ```powershell
-# Relatório em C:\TI (HTML + PDF se Chrome/Edge disponível)
+# Relatório na pasta padronizada (HTML + PDF se Chrome/Edge disponível)
 .\Inventario-Hardware-Software.ps1
 
 # Somente HTML, sem PDF
@@ -53,4 +53,4 @@ Scripts de inventário de hardware e software. Coletam informações detalhadas 
 
 **Requisitos:** Administrador local recomendado (dados de hardware exigem privilégios elevados). Windows 10+. PowerShell 5.1+.
 
-**Log:** `C:\TI\<timestamp>-Inventario-Hardware-Software.log`
+**Log:** `C:\WBA\Relatorios\Inventory\<timestamp>\logs\inventario-<timestamp>.log` ou `<OutputDir>\Inventory\<timestamp>\logs\...`

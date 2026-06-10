@@ -13,7 +13,7 @@
     críticos do Windows.
 
 .FUNCIONALIDADES
-    - Cria log completo em C:\ti.
+    - Cria log completo na pasta padronizada de relatorios do toolkit.
     - Solicita elevação administrativa automaticamente.
     - Coleta espaço livre antes e depois da limpeza.
     - Remove arquivos temporários do usuário atual.
@@ -128,7 +128,9 @@ param (
     [string]$EventLogCleanup = 'None',
 
     [ValidateRange(1, 64)]
-    [int]$PageFileGB = 4
+    [int]$PageFileGB = 4,
+
+    [string]$DiretorioSaida
 )
 
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
@@ -147,13 +149,14 @@ Import-Module $ToolkitModulePath -Force -ErrorAction Stop
 
 $ScriptVersion = "v1.0"
 $ScriptName    = $MyInvocation.MyCommand.Name
-$LogDir = "C:\ti"
+$ReportSession = Initialize-ToolkitReportSession -ReportsRoot $DiretorioSaida -ModuleName 'Maintenance'
+$LogDir = $ReportSession.LogsPath
 
 # Quando o parâmetro NÃO foi passado explicitamente → modo interativo (Ask).
 # Quando foi passado explicitamente → usa o valor (inclusive o default 'Skip'/'None').
 $resolvedChkdskAction    = if ($PSBoundParameters.ContainsKey('ChkdskAction'))    { $ChkdskAction }    else { 'Ask' }
 $resolvedEventLogCleanup = if ($PSBoundParameters.ContainsKey('EventLogCleanup')) { $EventLogCleanup } else { 'Ask' }
-$LogFile = Join-Path $LogDir "$((Get-Date).ToString('yyyy-MM-dd_HH-mm-ss'))-$([System.IO.Path]::GetFileNameWithoutExtension($ScriptName)).log"
+$LogFile = Join-Path $LogDir "$((Get-Date).ToString('yyyy-MM-dd_HHmmss'))-$([System.IO.Path]::GetFileNameWithoutExtension($ScriptName)).log"
 
 function Show-Help {
     Write-Host ""
@@ -178,6 +181,7 @@ function Show-Help {
     Write-Host "  -ChkdskAction         Schedule | Skip  (padrão interativo; Skip para automação)"
     Write-Host "  -EventLogCleanup      All | ErrorOnly | None  (padrão interativo; None para automação)"
     Write-Host "  -PageFileGB N         Define tamanho do pagefile em GB (1-64, padrão: 4)"
+    Write-Host "  -DiretorioSaida <dir> Raiz de relatorios. Padrao: configuracao global ou C:\WBA\Relatorios"
     Write-Host ""
     Write-Host "Exemplos:"
     Write-Host "  .\$ScriptName -NoReboot"

@@ -43,7 +43,7 @@ textual. O modo `Rollback` reativa entradas de inicialização que foram desabil
 | `-GerarJson` | — | Mantido por compatibilidade; JSON é gerado por padrão |
 | `-AgendarChkdsk` | — | No modo assistido, oferece agendamento de `chkdsk /r` com confirmação textual |
 | `-CriarPontoRestauracao` | — | Reservado para evolução do modo assistido |
-| `-DiretorioSaida` | `C:\WBA\Relatorios\HD100` | Diretório base das execuções |
+| `-DiretorioSaida` | `ReportsRoot` ou `C:\WBA\Relatorios` | Raiz de relatórios; o script cria `HD100\<timestamp>` |
 
 **Uso básico:**
 
@@ -67,7 +67,7 @@ textual. O modo `Rollback` reativa entradas de inicialização que foram desabil
 .\Diagnostico-Reparo-HD100.ps1 -Modo Relatorio -GerarHtml
 ```
 
-**Saída:** `C:\WBA\Relatorios\HD100\<timestamp>\`
+**Saída:** `C:\WBA\Relatorios\HD100\<timestamp>\` ou `<DiretorioSaida>\HD100\<timestamp>\`
 
 ### `limpeza-windows.ps1`
 
@@ -136,4 +136,4 @@ textual. O modo `Rollback` reativa entradas de inicialização que foram desabil
 
 **Requisitos:** Administrador local. Windows 10 Pro. PowerShell 5.1+.
 
-**Log:** `C:\ti\<timestamp>-limpeza-windows.log`
+**Log:** `C:\WBA\Relatorios\Maintenance\<timestamp>\logs\<timestamp>-limpeza-windows.log` ou `<DiretorioSaida>\Maintenance\<timestamp>\logs\...`
