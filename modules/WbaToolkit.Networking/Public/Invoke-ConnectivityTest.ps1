@@ -23,52 +23,52 @@ function Invoke-ConnectivityTest {
 
     $startedAt = Get-Date
     $context   = Get-NetworkContext
-    $results   = New-Object System.Collections.Generic.List[object]
+    $results   = [System.Collections.ArrayList]::new()
     $blocked   = $false
     $reason    = $null
 
     if (-not $context.InterfaceAlias) {
-        $results.Add((New-ConnectivityResult -TestName 'Contexto de rede' -Category 'Contexto' -Success $false -Status 'Sem adaptador ativo' -Classification 'Error' `
+        $null = $results.Add((New-ConnectivityResult -TestName 'Contexto de rede' -Category 'Contexto' -Success $false -Status 'Sem adaptador ativo' -Classification 'Error' `
             -Recommendation 'Nenhum adaptador ativo foi encontrado.' -StartedAt $startedAt -FinishedAt (Get-Date) -Details $context))
         $blocked = $true
         $reason = 'Nenhum adaptador ativo encontrado.'
     }
     elseif (-not $context.Gateway) {
-        $results.Add((New-ConnectivityResult -TestName 'Contexto de rede' -Category 'Contexto' -Success $false -Status 'Gateway ausente' -Classification 'Error' `
+        $null = $results.Add((New-ConnectivityResult -TestName 'Contexto de rede' -Category 'Contexto' -Success $false -Status 'Gateway ausente' -Classification 'Error' `
             -Recommendation 'Configure uma rota padrão antes de continuar.' -StartedAt $startedAt -FinishedAt (Get-Date) -Details $context))
         $blocked = $true
         $reason = 'Gateway padrão não configurado.'
     }
     elseif (-not $context.DnsServers -or @($context.DnsServers).Count -eq 0) {
-        $results.Add((New-ConnectivityResult -TestName 'Contexto de rede' -Category 'Contexto' -Success $false -Status 'DNS ausente' -Classification 'Error' `
+        $null = $results.Add((New-ConnectivityResult -TestName 'Contexto de rede' -Category 'Contexto' -Success $false -Status 'DNS ausente' -Classification 'Error' `
             -Recommendation 'Configure ao menos um servidor DNS antes de continuar.' -StartedAt $startedAt -FinishedAt (Get-Date) -Details $context))
         $blocked = $true
         $reason = 'Servidores DNS não configurados.'
     }
     else {
-        $results.Add((New-ConnectivityResult -TestName 'Contexto de rede' -Category 'Contexto' -Success $true -Status 'OK' -Classification 'Success' `
+        $null = $results.Add((New-ConnectivityResult -TestName 'Contexto de rede' -Category 'Contexto' -Success $true -Status 'OK' -Classification 'Success' `
             -Recommendation 'Contexto de rede detectado com sucesso.' -StartedAt $startedAt -FinishedAt (Get-Date) -Details $context))
     }
 
     if (-not $blocked) {
         foreach ($target in $IpTargets) {
-            $results.Add((Test-IcmpConnectivity -TargetAddress $target))
+            $null = $results.Add((Test-IcmpConnectivity -TargetAddress $target))
         }
 
         foreach ($target in @('1.1.1.1', '8.8.8.8')) {
-            $results.Add((Test-TcpPortConnectivity -TargetAddress $target -Port $TcpPort -Scope 'WAN' -Direction 'Outbound'))
+            $null = $results.Add((Test-TcpPortConnectivity -TargetAddress $target -Port $TcpPort -Scope 'WAN' -Direction 'Outbound'))
         }
 
         foreach ($name in $DnsTargets) {
-            $results.Add((Test-DnsResolution -Name $name))
+            $null = $results.Add((Test-DnsResolution -Name $name))
         }
 
         foreach ($name in $DomainTargets) {
             $icmp = Test-IcmpConnectivity -TargetAddress $name
-            $results.Add($icmp)
+            $null = $results.Add($icmp)
 
             if (-not $icmp.Success) {
-                $results.Add((Test-TcpPortConnectivity -TargetAddress $name -Port $TcpPort -Scope 'WAN' -Direction 'Outbound'))
+                $null = $results.Add((Test-TcpPortConnectivity -TargetAddress $name -Port $TcpPort -Scope 'WAN' -Direction 'Outbound'))
             }
         }
     }
