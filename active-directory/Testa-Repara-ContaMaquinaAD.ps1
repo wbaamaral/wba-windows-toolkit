@@ -50,6 +50,10 @@ $PSDefaultParameterValues['Set-Content:Encoding'] = 'utf8'
 $PSDefaultParameterValues['Add-Content:Encoding'] = 'utf8'
 chcp 65001 | Out-Null
 
+$ToolkitRoot = Split-Path -Parent $PSScriptRoot
+$ToolkitModulePath = Join-Path $ToolkitRoot 'modules/WbaToolkit.Core/WbaToolkit.Core.psd1'
+Import-Module $ToolkitModulePath -Force -ErrorAction Stop
+
 Set-StrictMode -Version 2.0
 $ErrorActionPreference = 'Continue'
 
@@ -68,34 +72,6 @@ $script:Results = New-Object System.Collections.Generic.List[object]
 $script:DetectedDcHost = $null
 $script:DetectedDcIp = $null
 
-function Write-Title {
-    param([string]$Message)
-    Write-Host ''
-    Write-Host ('=' * 90) -ForegroundColor Cyan
-    Write-Host $Message -ForegroundColor Cyan
-    Write-Host ('=' * 90) -ForegroundColor Cyan
-}
-
-function Write-Ok {
-    param([string]$Message)
-    Write-Host "[OK] $Message" -ForegroundColor Green
-}
-
-function Write-WarnMsg {
-    param([string]$Message)
-    Write-Host "[AVISO] $Message" -ForegroundColor Yellow
-}
-
-function Write-Fail {
-    param([string]$Message)
-    Write-Host "[FALHA] $Message" -ForegroundColor Red
-}
-
-function Write-InfoMsg {
-    param([string]$Message)
-    Write-Host "[INFO] $Message" -ForegroundColor White
-}
-
 function Add-TestResult {
     param(
         [string]$Etapa,
@@ -109,32 +85,6 @@ function Add-TestResult {
         Status   = $Status
         Detalhe  = $Detalhe
     }) | Out-Null
-}
-
-function Ask-YesNo {
-    param(
-        [Parameter(Mandatory = $true)]
-        [string]$Question,
-
-        [Parameter(Mandatory = $false)]
-        [bool]$DefaultYes = $false
-    )
-
-    $suffix = if ($DefaultYes) { '[S/n]' } else { '[s/N]' }
-
-    while ($true) {
-        $answer = Read-Host "$Question $suffix"
-
-        if ([string]::IsNullOrWhiteSpace($answer)) {
-            return $DefaultYes
-        }
-
-        switch -Regex ($answer.Trim()) {
-            '^(s|sim|y|yes)$' { return $true }
-            '^(n|nao|não|no)$' { return $false }
-            default { Write-WarnMsg 'Resposta inválida. Digite S ou N.' }
-        }
-    }
 }
 
 function Read-ValueWithDefault {
@@ -163,37 +113,6 @@ function Test-IsIPv4 {
     return ($Value -match '^\d{1,3}(\.\d{1,3}){3}$')
 }
 
-function Invoke-ExternalCommand {
-    param(
-        [Parameter(Mandatory = $true)]
-        [string]$FilePath,
-
-        [Parameter(Mandatory = $false)]
-        [string[]]$ArgumentList = @()
-    )
-
-    if (-not (Get-Command $FilePath -ErrorAction SilentlyContinue)) {
-        return [PSCustomObject]@{
-            ExitCode = 127
-            Output   = "Comando não encontrado: $FilePath"
-        }
-    }
-
-    try {
-        $output = & $FilePath @ArgumentList 2>&1
-        return [PSCustomObject]@{
-            ExitCode = $LASTEXITCODE
-            Output   = (($output | Out-String).Trim())
-        }
-    }
-    catch {
-        return [PSCustomObject]@{
-            ExitCode = 1
-            Output   = $_.Exception.Message
-        }
-    }
-}
-
 function Get-DomainCredentialSafe {
     param([string]$Purpose)
 
@@ -205,8 +124,8 @@ function Get-DomainCredentialSafe {
             'DOMINIO\Administrador'
         }
 
-        Write-InfoMsg "Será solicitada uma credencial com permissão para: $Purpose"
-        Write-InfoMsg "Exemplo de formato: $userHint"
+        Write-Info "Será solicitada uma credencial com permissão para: $Purpose"
+        Write-Info "Exemplo de formato: $userHint"
         $script:DomainCredential = Get-Credential -Message "Credencial de domínio para $Purpose"
     }
 
@@ -230,7 +149,7 @@ function Initialize-Log {
         Write-Ok "Log iniciado em: $logFile"
     }
     catch {
-        Write-WarnMsg "Não foi possível iniciar transcript: $($_.Exception.Message)"
+        Write-Warn "Não foi possível iniciar transcript: $($_.Exception.Message)"
     }
 }
 
@@ -239,9 +158,9 @@ function Initialize-Context {
 
     $computerSystem = Get-CimInstance Win32_ComputerSystem
 
-    Write-InfoMsg "Computador: $($computerSystem.Name)"
-    Write-InfoMsg "Domínio/Grupo atual: $($computerSystem.Domain)"
-    Write-InfoMsg "Ingressado em domínio: $($computerSystem.PartOfDomain)"
+    Write-Info "Computador: $($computerSystem.Name)"
+    Write-Info "Domínio/Grupo atual: $($computerSystem.Domain)"
+    Write-Info "Ingressado em domínio: $($computerSystem.PartOfDomain)"
 
     if ([string]::IsNullOrWhiteSpace($DomainFqdn)) {
         if ($computerSystem.PartOfDomain -and $computerSystem.Domain -and ($computerSystem.Domain -ne $computerSystem.Name)) {
@@ -258,7 +177,7 @@ function Initialize-Context {
     }
 
     if (-not [string]::IsNullOrWhiteSpace($PreferredDc)) {
-        Write-InfoMsg "DC preferencial informado: $PreferredDc"
+        Write-Info "DC preferencial informado: $PreferredDc"
     }
 
     Add-TestResult -Etapa 'Contexto' -Status 'INFO' -Detalhe "Computador=$($computerSystem.Name); DomainFqdn=$DomainFqdn; DomainNetBIOS=$DomainNetBIOS; PartOfDomain=$($computerSystem.PartOfDomain)"
@@ -285,10 +204,10 @@ function Show-DnsClientConfiguration {
                 Add-TestResult -Etapa 'DNS Cliente' -Status 'OK' -Detalhe 'DNS esperado encontrado.'
             }
             else {
-                Write-WarnMsg "DNS esperado não encontrado: $($missing -join ', ')"
+                Write-Warn "DNS esperado não encontrado: $($missing -join ', ')"
                 Add-TestResult -Etapa 'DNS Cliente' -Status 'AVISO' -Detalhe "DNS esperado ausente: $($missing -join ', ')"
 
-                if (Ask-YesNo -Question 'Deseja configurar os DNS informados nas interfaces IPv4 ativas agora?' -DefaultYes $false) {
+                if (Read-YesNo -Question 'Deseja configurar os DNS informados nas interfaces IPv4 ativas agora?' -DefaultYes $false) {
                     $activeAdapters = Get-NetAdapter | Where-Object { $_.Status -eq 'Up' }
                     foreach ($adapter in $activeAdapters) {
                         try {
@@ -305,7 +224,7 @@ function Show-DnsClientConfiguration {
             }
         }
         else {
-            Write-InfoMsg 'Nenhum DNS esperado foi informado por parâmetro. Apenas exibindo a configuração atual.'
+            Write-Info 'Nenhum DNS esperado foi informado por parâmetro. Apenas exibindo a configuração atual.'
         }
     }
     catch {
@@ -326,7 +245,7 @@ function Test-DnsRecords {
     )
 
     foreach ($query in $queries) {
-        Write-InfoMsg "Resolve-DnsName -Type $($query.Type) $($query.Name)"
+        Write-Info "Resolve-DnsName -Type $($query.Type) $($query.Name)"
 
         try {
             $records = Resolve-DnsName -Name $query.Name -Type $query.Type -ErrorAction Stop
@@ -340,7 +259,7 @@ function Test-DnsRecords {
         }
     }
 
-    if (Ask-YesNo -Question 'Deseja executar ipconfig /flushdns e ipconfig /registerdns?' -DefaultYes $false) {
+    if (Read-YesNo -Question 'Deseja executar ipconfig /flushdns e ipconfig /registerdns?' -DefaultYes $false) {
         ipconfig /flushdns | Out-Host
         ipconfig /registerdns | Out-Host
         Add-TestResult -Etapa 'Correção DNS Cache' -Status 'OK' -Detalhe 'Executado flushdns e registerdns.'
@@ -391,8 +310,8 @@ function Get-DomainControllerByNltest {
         }
     }
 
-    Write-InfoMsg "DC detectado por nome: $script:DetectedDcHost"
-    Write-InfoMsg "DC detectado por IP: $script:DetectedDcIp"
+    Write-Info "DC detectado por nome: $script:DetectedDcHost"
+    Write-Info "DC detectado por IP: $script:DetectedDcIp"
 }
 
 function Get-DcTarget {
@@ -411,7 +330,7 @@ function Test-DcPorts {
     Write-Title 'Teste 4 - Portas essenciais para autenticação no AD'
 
     $dcTarget = Get-DcTarget
-    Write-InfoMsg "Alvo dos testes de porta: $dcTarget"
+    Write-Info "Alvo dos testes de porta: $dcTarget"
 
     $ports = @(
         [PSCustomObject]@{ Port = 53;   Service = 'DNS' },
@@ -424,7 +343,7 @@ function Test-DcPorts {
     )
 
     foreach ($item in $ports) {
-        Write-InfoMsg "Test-NetConnection $dcTarget -Port $($item.Port) ($($item.Service))"
+        Write-Info "Test-NetConnection $dcTarget -Port $($item.Port) ($($item.Service))"
 
         try {
             $ok = Test-NetConnection -ComputerName $dcTarget -Port $item.Port -InformationLevel Quiet -WarningAction SilentlyContinue
@@ -443,7 +362,7 @@ function Test-DcPorts {
         }
     }
 
-    Write-WarnMsg 'Observação: Test-NetConnection testa TCP. DNS e Kerberos também podem usar UDP em cenários específicos.'
+    Write-Warn 'Observação: Test-NetConnection testa TCP. DNS e Kerberos também podem usar UDP em cenários específicos.'
 }
 
 function Test-TimeSync {
@@ -456,12 +375,12 @@ function Test-TimeSync {
         $DomainFqdn
     }
 
-    Write-InfoMsg 'Status atual do Windows Time:'
+    Write-Info 'Status atual do Windows Time:'
     $timeStatus = Invoke-ExternalCommand -FilePath 'w32tm.exe' -ArgumentList @('/query', '/status')
     Write-Host $timeStatus.Output
     Add-TestResult -Etapa 'Hora' -Status 'INFO' -Detalhe $timeStatus.Output
 
-    Write-InfoMsg "Comparação de relógio com: $dcForTime"
+    Write-Info "Comparação de relógio com: $dcForTime"
     $stripChart = Invoke-ExternalCommand -FilePath 'w32tm.exe' -ArgumentList @('/stripchart', "/computer:$dcForTime", '/samples:5', '/dataonly')
     Write-Host $stripChart.Output
 
@@ -472,7 +391,7 @@ function Test-TimeSync {
         Add-TestResult -Etapa 'Hora Stripchart' -Status 'FALHA' -Detalhe $stripChart.Output
     }
 
-    if (Ask-YesNo -Question 'Deseja forçar sincronização pela hierarquia do domínio agora?' -DefaultYes $false) {
+    if (Read-YesNo -Question 'Deseja forçar sincronização pela hierarquia do domínio agora?' -DefaultYes $false) {
         Invoke-ExternalCommand -FilePath 'w32tm.exe' -ArgumentList @('/config', '/syncfromflags:domhier', '/update') | ForEach-Object { Write-Host $_.Output }
         Invoke-ExternalCommand -FilePath 'w32tm.exe' -ArgumentList @('/resync', '/rediscover') | ForEach-Object { Write-Host $_.Output }
         Add-TestResult -Etapa 'Correção Hora' -Status 'OK' -Detalhe 'Executado w32tm /config /syncfromflags:domhier /update e /resync /rediscover.'
@@ -487,7 +406,7 @@ function Test-DomainMembership {
         $info = Get-ComputerInfo | Select-Object CsName, CsDomain, CsPartOfDomain
     }
     catch {
-        Write-WarnMsg "Get-ComputerInfo falhou ou não está disponível. Usando Win32_ComputerSystem como fallback: $($_.Exception.Message)"
+        Write-Warn "Get-ComputerInfo falhou ou não está disponível. Usando Win32_ComputerSystem como fallback: $($_.Exception.Message)"
         $computerSystem = Get-CimInstance Win32_ComputerSystem
         $info = [PSCustomObject]@{
             CsName         = $computerSystem.Name
@@ -503,7 +422,7 @@ function Test-DomainMembership {
         Write-Fail 'A máquina não está ingressada em domínio.'
         Add-TestResult -Etapa 'Ingresso no domínio' -Status 'FALHA' -Detalhe 'PartOfDomain=False'
 
-        if (Ask-YesNo -Question "Deseja ingressar esta máquina no domínio $DomainFqdn agora?" -DefaultYes $false) {
+        if (Read-YesNo -Question "Deseja ingressar esta máquina no domínio $DomainFqdn agora?" -DefaultYes $false) {
             $cred = Get-DomainCredentialSafe -Purpose "ingressar máquina no domínio $DomainFqdn"
 
             try {
@@ -511,7 +430,7 @@ function Test-DomainMembership {
                 Write-Ok 'Ingresso no domínio solicitado com sucesso.'
                 Add-TestResult -Etapa 'Correção Ingresso' -Status 'OK' -Detalhe "Add-Computer -DomainName $DomainFqdn executado."
 
-                if (Ask-YesNo -Question 'É necessário reiniciar para concluir. Deseja reiniciar agora?' -DefaultYes $true) {
+                if (Read-YesNo -Question 'É necessário reiniciar para concluir. Deseja reiniciar agora?' -DefaultYes $true) {
                     Restart-Computer -Force
                 }
             }
@@ -529,7 +448,7 @@ function Test-DomainMembership {
         Add-TestResult -Etapa 'Ingresso no domínio' -Status 'OK' -Detalhe "Domain=$($info.CsDomain)"
     }
     else {
-        Write-WarnMsg "Máquina ingressada em domínio diferente do informado. Atual=$($info.CsDomain); Esperado=$DomainFqdn"
+        Write-Warn "Máquina ingressada em domínio diferente do informado. Atual=$($info.CsDomain); Esperado=$DomainFqdn"
         Add-TestResult -Etapa 'Ingresso no domínio' -Status 'AVISO' -Detalhe "Atual=$($info.CsDomain); Esperado=$DomainFqdn"
     }
 
@@ -576,11 +495,11 @@ function Test-MachineKerberosTickets {
         Add-TestResult -Etapa 'klist máquina' -Status 'OK' -Detalhe "Principal esperado encontrado: $machinePrincipal"
     }
     elseif ($result.ExitCode -eq 0 -and $result.Output -match 'Tíquetes em Cache:\s*\(0\)|Cached Tickets:\s*\(0\)') {
-        Write-WarnMsg 'Cache Kerberos da conta de máquina está vazio. Isso pode ocorrer antes de reparar/reiniciar ou quando o canal seguro está quebrado.'
+        Write-Warn 'Cache Kerberos da conta de máquina está vazio. Isso pode ocorrer antes de reparar/reiniciar ou quando o canal seguro está quebrado.'
         Add-TestResult -Etapa 'klist máquina' -Status 'AVISO' -Detalhe 'Cache da conta de máquina vazio.'
     }
     else {
-        Write-WarnMsg "Não encontrei claramente o principal $machinePrincipal no cache da conta de máquina. Revise a saída acima."
+        Write-Warn "Não encontrei claramente o principal $machinePrincipal no cache da conta de máquina. Revise a saída acima."
         Add-TestResult -Etapa 'klist máquina' -Status 'AVISO' -Detalhe $result.Output
     }
 }
@@ -608,7 +527,7 @@ function Test-AndRepairComputerSecureChannel {
     Write-Fail 'O canal seguro entre a máquina e o domínio está quebrado.'
     Add-TestResult -Etapa 'Secure Channel' -Status 'FALHA' -Detalhe 'Test-ComputerSecureChannel=False'
 
-    if (-not (Ask-YesNo -Question 'Deseja tentar reparar o canal seguro agora com credencial de domínio?' -DefaultYes $true)) {
+    if (-not (Read-YesNo -Question 'Deseja tentar reparar o canal seguro agora com credencial de domínio?' -DefaultYes $true)) {
         return $false
     }
 
@@ -625,9 +544,9 @@ function Test-AndRepairComputerSecureChannel {
     }
 
     if (-not $repairOk) {
-        Write-WarnMsg 'A primeira tentativa de reparo não confirmou sucesso.'
+        Write-Warn 'A primeira tentativa de reparo não confirmou sucesso.'
 
-        if (Ask-YesNo -Question 'Deseja tentar Reset-ComputerMachinePassword apontando diretamente para o DC?' -DefaultYes $true) {
+        if (Read-YesNo -Question 'Deseja tentar Reset-ComputerMachinePassword apontando diretamente para o DC?' -DefaultYes $true) {
             $server = if (-not [string]::IsNullOrWhiteSpace($script:DetectedDcHost)) {
                 $script:DetectedDcHost
             }
@@ -662,22 +581,22 @@ function Test-AndRepairComputerSecureChannel {
         Write-Ok 'Canal seguro reparado com sucesso.'
         Add-TestResult -Etapa 'Reparo Secure Channel' -Status 'OK' -Detalhe 'Reparo concluído.'
 
-        if (Ask-YesNo -Question 'Deseja limpar cache DNS e registrar DNS da máquina agora?' -DefaultYes $true) {
+        if (Read-YesNo -Question 'Deseja limpar cache DNS e registrar DNS da máquina agora?' -DefaultYes $true) {
             ipconfig /flushdns | Out-Host
             ipconfig /registerdns | Out-Host
             Add-TestResult -Etapa 'Pós-reparo DNS' -Status 'OK' -Detalhe 'Executado flushdns/registerdns.'
         }
 
-        if (Ask-YesNo -Question 'Deseja apagar tickets Kerberos da conta de máquina para forçar renovação?' -DefaultYes $false) {
+        if (Read-YesNo -Question 'Deseja apagar tickets Kerberos da conta de máquina para forçar renovação?' -DefaultYes $false) {
             Invoke-ExternalCommand -FilePath 'klist.exe' -ArgumentList @('purge', '-li', '0x3e7') | ForEach-Object { Write-Host $_.Output }
             Add-TestResult -Etapa 'Pós-reparo Kerberos' -Status 'OK' -Detalhe 'Executado klist purge -li 0x3e7.'
         }
 
-        Write-InfoMsg 'Executando validações pós-reparo.'
+        Write-Info 'Executando validações pós-reparo.'
         Test-NltestSecureChannel
         Test-MachineKerberosTickets
 
-        if (Ask-YesNo -Question 'Recomenda-se reiniciar para validar o logon da conta de máquina. Deseja reiniciar agora?' -DefaultYes $true) {
+        if (Read-YesNo -Question 'Recomenda-se reiniciar para validar o logon da conta de máquina. Deseja reiniciar agora?' -DefaultYes $true) {
             Restart-Computer -Force
         }
 
@@ -685,13 +604,13 @@ function Test-AndRepairComputerSecureChannel {
     }
 
     Write-Fail 'Não foi possível reparar automaticamente o canal seguro.'
-    Write-WarnMsg 'Próximo passo recomendado: resetar a conta de computador no AD e, se necessário, remover e reinserir a máquina no domínio.'
+    Write-Warn 'Próximo passo recomendado: resetar a conta de computador no AD e, se necessário, remover e reinserir a máquina no domínio.'
 
-    if (Ask-YesNo -Question 'A conta de computador já foi resetada no AD/RSAT/Samba? Deseja tentar reparar novamente?' -DefaultYes $false) {
+    if (Read-YesNo -Question 'A conta de computador já foi resetada no AD/RSAT/Samba? Deseja tentar reparar novamente?' -DefaultYes $false) {
         return (Test-AndRepairComputerSecureChannel)
     }
 
-    if (Ask-YesNo -Question 'Deseja remover esta máquina do domínio para WORKGROUP agora? Será necessário reiniciar e ingressar novamente depois.' -DefaultYes $false) {
+    if (Read-YesNo -Question 'Deseja remover esta máquina do domínio para WORKGROUP agora? Será necessário reiniciar e ingressar novamente depois.' -DefaultYes $false) {
         Invoke-DomainRemoval
     }
 
@@ -708,16 +627,16 @@ function Invoke-DomainRemoval {
         Remove-Computer -UnjoinDomainCredential $cred -WorkgroupName $workgroup -Force -PassThru -Verbose -ErrorAction Stop
         Write-Ok "Máquina removida do domínio para o grupo $workgroup."
         Add-TestResult -Etapa 'Remoção domínio' -Status 'OK' -Detalhe "Workgroup=$workgroup"
-        Write-WarnMsg 'Após reiniciar, execute este script novamente para ingressar a máquina no domínio.'
+        Write-Warn 'Após reiniciar, execute este script novamente para ingressar a máquina no domínio.'
 
-        if (Ask-YesNo -Question 'Deseja reiniciar agora?' -DefaultYes $true) {
+        if (Read-YesNo -Question 'Deseja reiniciar agora?' -DefaultYes $true) {
             Restart-Computer -Force
         }
     }
     catch {
         Write-Fail "Falha ao remover do domínio: $($_.Exception.Message)"
         Add-TestResult -Etapa 'Remoção domínio' -Status 'FALHA' -Detalhe $_.Exception.Message
-        Write-WarnMsg 'Se a confiança estiver muito quebrada, use uma conta local administrativa, remova manualmente do domínio, reinicie e ingresse novamente.'
+        Write-Warn 'Se a confiança estiver muito quebrada, use uma conta local administrativa, remova manualmente do domínio, reinicie e ingresse novamente.'
     }
 }
 
@@ -738,25 +657,25 @@ function Show-FinalSummary {
     }
 
     if ($warnings.Count -gt 0) {
-        Write-WarnMsg "Avisos registrados: $($warnings.Count)"
+        Write-Warn "Avisos registrados: $($warnings.Count)"
     }
 
     Write-Host ''
-    Write-InfoMsg 'Critério de sucesso esperado:'
-    Write-InfoMsg '1. Resolve-DnsName do domínio e SRV retornando o DC correto.'
-    Write-InfoMsg '2. nltest /dsgetdc localizando o DC correto.'
-    Write-InfoMsg '3. Portas 53, 88, 135, 389, 445, 464 e 3268 comunicando com o DC.'
-    Write-InfoMsg '4. Test-ComputerSecureChannel retornando True.'
-    Write-InfoMsg '5. nltest /sc_query e /sc_verify retornando Status = 0 / NERR_Success.'
-    Write-InfoMsg "6. klist -li 0x3e7 exibindo tickets para $($env:COMPUTERNAME)`$@$($DomainFqdn.ToUpperInvariant())."
+    Write-Info 'Critério de sucesso esperado:'
+    Write-Info '1. Resolve-DnsName do domínio e SRV retornando o DC correto.'
+    Write-Info '2. nltest /dsgetdc localizando o DC correto.'
+    Write-Info '3. Portas 53, 88, 135, 389, 445, 464 e 3268 comunicando com o DC.'
+    Write-Info '4. Test-ComputerSecureChannel retornando True.'
+    Write-Info '5. nltest /sc_query e /sc_verify retornando Status = 0 / NERR_Success.'
+    Write-Info "6. klist -li 0x3e7 exibindo tickets para $($env:COMPUTERNAME)`$@$($DomainFqdn.ToUpperInvariant())."
 }
 
 try {
     Initialize-Log
 
     Write-Title 'Diagnóstico e reparo de conta de máquina no Active Directory'
-    Write-InfoMsg 'Execute este script em PowerShell como Administrador na estação Windows afetada.'
-    Write-InfoMsg 'Nenhuma correção crítica será aplicada sem confirmação.'
+    Write-Info 'Execute este script em PowerShell como Administrador na estação Windows afetada.'
+    Write-Info 'Nenhuma correção crítica será aplicada sem confirmação.'
 
     Initialize-Context
     Show-DnsClientConfiguration

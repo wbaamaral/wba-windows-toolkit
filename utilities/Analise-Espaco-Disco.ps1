@@ -60,6 +60,10 @@ $PSDefaultParameterValues['Set-Content:Encoding'] = 'utf8'
 $PSDefaultParameterValues['Add-Content:Encoding'] = 'utf8'
 chcp 65001 | Out-Null
 
+$ToolkitRoot = Split-Path -Parent $PSScriptRoot
+$ToolkitModulePath = Join-Path $ToolkitRoot 'modules/WbaToolkit.Core/WbaToolkit.Core.psd1'
+Import-Module $ToolkitModulePath -Force -ErrorAction Stop
+
 $ScriptVersion = "v1.0"
 $ScriptName    = $MyInvocation.MyCommand.Name
 $LogDir        = $OutputDir
@@ -89,20 +93,6 @@ function Show-Help {
     Write-Host ""
 }
 
-function Test-Admin {
-    $p = [Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()
-    return $p.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
-}
-
-function Format-FileSize {
-    param([long]$Bytes)
-    if ($Bytes -ge 1TB) { return "{0:N2} TB" -f ($Bytes / 1TB) }
-    if ($Bytes -ge 1GB) { return "{0:N2} GB" -f ($Bytes / 1GB) }
-    if ($Bytes -ge 1MB) { return "{0:N1} MB" -f ($Bytes / 1MB) }
-    if ($Bytes -ge 1KB) { return "{0:N1} KB" -f ($Bytes / 1KB) }
-    return "$Bytes B"
-}
-
 function Get-AsciiBar {
     param([double]$Pct, [int]$Width = 25)
     $filled = [int][Math]::Round($Pct / 100 * $Width)
@@ -115,12 +105,6 @@ function Get-BarColor {
     if ($Pct -ge 85) { return 'Red'    }
     if ($Pct -ge 65) { return 'Yellow' }
     return 'Green'
-}
-
-function Safe {
-    param($v, [string]$d = '&mdash;')
-    if ($null -eq $v -or "$v" -eq '') { return $d }
-    return "$v" -replace '&','&amp;' -replace '<','&lt;' -replace '>','&gt;'
 }
 
 # ---------------------------------------------------------------------------
@@ -477,7 +461,7 @@ footer{text-align:center;padding:20px;font-size:11px;color:var(--muted)}
             $badge   = if ($isHid) { '<span class="badge badge-hidden">Oculto</span>' } `
                        elseif ($isSys) { '<span class="badge badge-system">Sistema</span>' } `
                        else { '<span class="badge badge-ok">Normal</span>' }
-            $allFolderRows += "<tr><td>$rank</td><td class='sz'>$(Format-FileSize $sz)</td><td class='pct'>$pctDisk%</td><td><div class='mini-bar' style='width:$([Math]::Max(2,$pctBar))px'></div></td><td>$badge</td><td class='path'>$(Safe $entry.Key)</td></tr>"
+            $allFolderRows += "<tr><td>$rank</td><td class='sz'>$(Format-FileSize $sz)</td><td class='pct'>$pctDisk%</td><td><div class='mini-bar' style='width:$([Math]::Max(2,$pctBar))px'></div></td><td>$badge</td><td class='path'>$(ConvertTo-HtmlSafe $entry.Key)</td></tr>"
             $rank++
         }
     }
@@ -492,7 +476,7 @@ footer{text-align:center;padding:20px;font-size:11px;color:var(--muted)}
         $badge = if ($f.IsHidden) { '<span class="badge badge-hidden">Oculto</span>' } `
                  elseif ($f.IsSystem) { '<span class="badge badge-system">Sistema</span>' } `
                  else { '<span class="badge badge-ok">Normal</span>' }
-        $allFileRows += "<tr><td>$fileRank</td><td class='sz'>$(Format-FileSize $f.Size)</td><td>$(Safe $f.Ext)</td><td>$badge</td><td class='path'>$(Safe $f.Path)</td></tr>"
+        $allFileRows += "<tr><td>$fileRank</td><td class='sz'>$(Format-FileSize $f.Size)</td><td>$(ConvertTo-HtmlSafe $f.Ext)</td><td>$badge</td><td class='path'>$(ConvertTo-HtmlSafe $f.Path)</td></tr>"
         $fileRank++
     }
 
@@ -502,7 +486,7 @@ footer{text-align:center;padding:20px;font-size:11px;color:var(--muted)}
     foreach ($w in $AllWaste) {
         $wasteTotal += $w.SizeBytes
         $cls = if ($w.SizeBytes -gt 1GB) { 'waste-high' } elseif ($w.SizeBytes -gt 50MB) { 'waste-mid' } else { 'waste-low' }
-        $wasteRows += "<tr><td>$(Safe $w.Categoria)</td><td class='sz $cls'>$($w.SizeDisp)</td><td class='note'>$(Safe $w.Note)</td></tr>"
+        $wasteRows += "<tr><td>$(ConvertTo-HtmlSafe $w.Categoria)</td><td class='sz $cls'>$($w.SizeDisp)</td><td class='note'>$(ConvertTo-HtmlSafe $w.Note)</td></tr>"
     }
 
     $html = @"
@@ -567,7 +551,7 @@ function Convert-ToPdf {
 if ($Help)    { Show-Help; exit 0 }
 if ($Version) { Write-Host "Versao: $ScriptVersion" -ForegroundColor Green; exit 0 }
 
-if (-not (Test-Admin)) {
+if (-not (Test-IsAdministrator)) {
     $relaunchArgs = foreach ($kv in $PSBoundParameters.GetEnumerator()) {
         if ($kv.Value -is [switch]) { if ($kv.Value.IsPresent) { "-$($kv.Key)" } }
         else { "-$($kv.Key)"; "$($kv.Value)" }

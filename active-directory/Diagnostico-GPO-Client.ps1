@@ -33,21 +33,13 @@ $PSDefaultParameterValues['Set-Content:Encoding'] = 'utf8'
 $PSDefaultParameterValues['Add-Content:Encoding'] = 'utf8'
 chcp 65001 | Out-Null
 
+$ToolkitRoot = Split-Path -Parent $PSScriptRoot
+$ToolkitModulePath = Join-Path $ToolkitRoot 'modules/WbaToolkit.Core/WbaToolkit.Core.psd1'
+Import-Module $ToolkitModulePath -Force -ErrorAction Stop
+
 # ---------------------------------------------------------------------------
 # Helpers visuais
 # ---------------------------------------------------------------------------
-function Write-Ok    { param([string]$m) Write-Host "[OK]    $m" -ForegroundColor Green }
-function Write-Fail  { param([string]$m) Write-Host "[FALHA] $m" -ForegroundColor Red }
-function Write-Warn  { param([string]$m) Write-Host "[AVISO] $m" -ForegroundColor Yellow }
-function Write-Info  { param([string]$m) Write-Host "[INFO]  $m" -ForegroundColor White }
-function Write-Title {
-    param([string]$m)
-    Write-Host ''
-    Write-Host ('=' * 80) -ForegroundColor Cyan
-    Write-Host $m -ForegroundColor Cyan
-    Write-Host ('=' * 80) -ForegroundColor Cyan
-}
-
 # ---------------------------------------------------------------------------
 # Registro de resultados
 # ---------------------------------------------------------------------------
@@ -66,36 +58,12 @@ function Add-Result {
 # ---------------------------------------------------------------------------
 # Confirmacao interativa
 # ---------------------------------------------------------------------------
-function Ask-YesNo {
-    param([string]$Question, [bool]$DefaultYes = $false)
-    if ($SkipReparo) { return $false }
-    $suffix = if ($DefaultYes) { '[S/n]' } else { '[s/N]' }
-    while ($true) {
-        $answer = Read-Host "$Question $suffix"
-        if ([string]::IsNullOrWhiteSpace($answer)) { return $DefaultYes }
-        switch -Regex ($answer.Trim().ToLower()) {
-            '^(s|sim|y|yes)$' { return $true }
-            '^(n|nao|não|no)$' { return $false }
-            default { Write-Warn 'Digite S ou N.' }
-        }
-    }
-}
+
 
 # ---------------------------------------------------------------------------
 # Wrapper para executaveis externos
 # ---------------------------------------------------------------------------
-function Invoke-Ext {
-    param([string]$FilePath, [string[]]$ArgList = @())
-    if (-not (Get-Command $FilePath -ErrorAction SilentlyContinue)) {
-        return [PSCustomObject]@{ ExitCode = 127; Output = "Nao encontrado: $FilePath" }
-    }
-    try {
-        $out = & $FilePath @ArgList 2>&1
-        return [PSCustomObject]@{ ExitCode = $LASTEXITCODE; Output = ($out | Out-String).Trim() }
-    } catch {
-        return [PSCustomObject]@{ ExitCode = 1; Output = $_.Exception.Message }
-    }
-}
+
 
 # ---------------------------------------------------------------------------
 # Preparacao
@@ -114,7 +82,7 @@ if ([string]::IsNullOrWhiteSpace($DomainFQDN)) {
     $DomainFQDN = $env:USERDNSDOMAIN
 }
 if ([string]::IsNullOrWhiteSpace($DCName)) {
-    $nlDC = Invoke-Ext 'nltest' @("/dsgetdc:$DomainFQDN")
+    $nlDC = Invoke-ExternalCommand 'nltest' @("/dsgetdc:$DomainFQDN")
     if ($nlDC.Output -match 'DC:\s*\\\\(\S+)') {
         $DCName = $Matches[1]
     }
@@ -131,7 +99,7 @@ Write-Info  "HTML     : $HtmlReport"
 # ===========================================================================
 Write-Title 'TESTE 1 — Canal seguro (Secure Channel)'
 
-$sc = Invoke-Ext 'nltest' @("/sc_query:$DomainFQDN")
+$sc = Invoke-ExternalCommand 'nltest' @("/sc_query:$DomainFQDN")
 Write-Info $sc.Output
 
 if ($sc.Output -match 'LOGON_SERVER\\s*:\\s*\\\\\\\\(\S+)') {
@@ -142,7 +110,7 @@ if ($sc.Output -match 'LOGON_SERVER\\s*:\\s*\\\\\\\\(\S+)') {
     Write-Fail 'Canal seguro quebrado ou DC indisponivel'
     Add-Result 'Canal seguro' 'FALHA' $sc.Output
 
-    if (Ask-YesNo 'Tentar reparar o canal seguro agora?') {
+    if (Read-YesNo 'Tentar reparar o canal seguro agora?') {
         Write-Info 'Informe credenciais de Administrador do dominio:'
         $cred = Get-Credential
         $repaired = Test-ComputerSecureChannel -Repair -Credential $cred
@@ -252,7 +220,7 @@ foreach ($svc in $servicos) {
         Write-Fail "$($svc.Descricao) ($($svc.Nome)) — $($s.Status)"
         Add-Result "Servico $($svc.Descricao)" 'FALHA' $s.Status
 
-        if (Ask-YesNo "Iniciar o servico $($svc.Nome) agora?") {
+        if (Read-YesNo "Iniciar o servico $($svc.Nome) agora?") {
             try {
                 Start-Service -Name $svc.Nome -ErrorAction Stop
                 Write-Ok "Servico $($svc.Nome) iniciado"
@@ -270,11 +238,11 @@ foreach ($svc in $servicos) {
 # ===========================================================================
 Write-Title 'TESTE 5 — Sincronizacao de horario (NTP / Kerberos)'
 
-$w32 = Invoke-Ext 'w32tm' @('/query', '/status')
+$w32 = Invoke-ExternalCommand 'w32tm' @('/query', '/status')
 Write-Info $w32.Output
 
 if (-not [string]::IsNullOrWhiteSpace($DCName)) {
-    $timeDiff = Invoke-Ext 'w32tm' @('/stripchart', "/computer:$DCName", '/samples:3', '/dataonly')
+    $timeDiff = Invoke-ExternalCommand 'w32tm' @('/stripchart', "/computer:$DCName", '/samples:3', '/dataonly')
     Write-Info $timeDiff.Output
 
     # Extrai offset maximo (Kerberos tolera ate 5 minutos)
@@ -290,8 +258,8 @@ if (-not [string]::IsNullOrWhiteSpace($DCName)) {
             Write-Fail "Offset de horario: $maxOff s — acima de 5 min; Kerberos ira falhar"
             Add-Result 'Sincronizacao NTP' 'FALHA' "Offset: $maxOff s"
 
-            if (Ask-YesNo 'Forcar sincronizacao de horario agora?') {
-                Invoke-Ext 'w32tm' @('/resync', '/force') | Out-Null
+            if (Read-YesNo 'Forcar sincronizacao de horario agora?') {
+                Invoke-ExternalCommand 'w32tm' @('/resync', '/force') | Out-Null
                 Write-Ok 'Sincronizacao forcada executada'
                 Add-Result 'Reparo NTP' 'OK' 'w32tm /resync /force'
             }
@@ -310,12 +278,12 @@ if (-not [string]::IsNullOrWhiteSpace($DCName)) {
 # ===========================================================================
 Write-Title 'TESTE 6 — GPOs aplicadas (gpresult)'
 
-$gprText = Invoke-Ext 'gpresult' @('/r', '/scope', 'computer')
+$gprText = Invoke-ExternalCommand 'gpresult' @('/r', '/scope', 'computer')
 Write-Info $gprText.Output
 Add-Result 'gpresult /r' 'INFO' ($gprText.Output | Select-Object -First 5 | Out-String)
 
 # Gera relatorio HTML
-$gprHtml = Invoke-Ext 'gpresult' @('/h', $HtmlReport, '/f')
+$gprHtml = Invoke-ExternalCommand 'gpresult' @('/h', $HtmlReport, '/f')
 if (Test-Path $HtmlReport) {
     Write-Ok "Relatorio HTML gerado: $HtmlReport"
     Add-Result 'gpresult HTML' 'OK' $HtmlReport
@@ -376,9 +344,9 @@ if ($netlogonEvt) {
 # ===========================================================================
 Write-Title 'TESTE 8 — Atualizar GPO agora (gpupdate /force)'
 
-if (Ask-YesNo 'Executar gpupdate /force agora para testar a aplicacao?' $false) {
+if (Read-YesNo 'Executar gpupdate /force agora para testar a aplicacao?' $false) {
     Write-Info 'Executando gpupdate /force — aguarde...'
-    $gpu = Invoke-Ext 'gpupdate' @('/force')
+    $gpu = Invoke-ExternalCommand 'gpupdate' @('/force')
     Write-Info $gpu.Output
 
     if ($gpu.ExitCode -eq 0) {
@@ -398,7 +366,7 @@ if (Ask-YesNo 'Executar gpupdate /force agora para testar a aplicacao?' $false) 
 Write-Title 'TESTE 9 — RSoP (Resultant Set of Policy)'
 
 $RsopXml = Join-Path $LogDir "RSoP-$Timestamp.xml"
-$gprXmlResult = Invoke-Ext 'gpresult' @('/x', $RsopXml, '/scope', 'computer', '/f')
+$gprXmlResult = Invoke-ExternalCommand 'gpresult' @('/x', $RsopXml, '/scope', 'computer', '/f')
 
 if (Test-Path $RsopXml) {
     try {

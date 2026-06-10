@@ -20,6 +20,10 @@ $PSDefaultParameterValues['Add-Content:Encoding'] = 'utf8'
 
 chcp 65001 | Out-Null
 
+$ToolkitRoot = Split-Path -Parent $PSScriptRoot
+$ToolkitModulePath = Join-Path $ToolkitRoot 'modules/WbaToolkit.Core/WbaToolkit.Core.psd1'
+Import-Module $ToolkitModulePath -Force -ErrorAction Stop
+
 <#
 .SINOPSE
     Script de atualização básica e conservadora para Windows 10 Pro.
@@ -157,66 +161,12 @@ function Show-Help {
     Write-Host ""
 }
 
-function Test-Admin {
-    $Identity = [Security.Principal.WindowsIdentity]::GetCurrent()
-    $Principal = [Security.Principal.WindowsPrincipal]::new($Identity)
-    return $Principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
-}
-
-function Write-Section {
-    param (
-        [string]$Title
-    )
-
-    Write-Host ""
-    Write-Host "============================================================" -ForegroundColor Cyan
-    Write-Host " $Title" -ForegroundColor Cyan
-    Write-Host "============================================================" -ForegroundColor Cyan
-}
-
-function Write-Info {
-    param (
-        [string]$Message
-    )
-
-    Write-Host "[INFO] $Message" -ForegroundColor Green
-}
-
-function Write-Warn {
-    param (
-        [string]$Message
-    )
-
-    Write-Host "[AVISO] $Message" -ForegroundColor Yellow
-}
-
 function Write-Err {
     param (
         [string]$Message
     )
 
     Write-Host "[ERRO] $Message" -ForegroundColor Red
-}
-
-function Invoke-Safe {
-    param (
-        [string]$Description,
-        [scriptblock]$Command
-    )
-
-    try {
-        Write-Info "Executando: $Description"
-        & $Command
-        $ExitCode = $LASTEXITCODE
-
-        if ($null -ne $ExitCode -and $ExitCode -ne 0) {
-            Write-Warn "$Description retornou código de saída: $ExitCode"
-        }
-    }
-    catch {
-        Write-Err "Falha em: $Description"
-        Write-Err $_.Exception.Message
-    }
 }
 
 function Invoke-NativeWindowsUpdate {
@@ -283,7 +233,7 @@ if ($Version) {
     exit 0
 }
 
-if (-not (Test-Admin)) {
+if (-not (Test-IsAdministrator)) {
     Start-Process powershell.exe -ArgumentList "-NoProfile -ExecutionPolicy Bypass -File `"$ScriptPath`" $args" -Verb RunAs
     exit
 }

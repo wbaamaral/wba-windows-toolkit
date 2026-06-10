@@ -8,6 +8,11 @@ O WBA Windows Toolkit reúne scripts PowerShell desenvolvidos para simplificar t
 
 O foco do projeto é disponibilizar ferramentas seguras, documentadas e reutilizáveis para ambientes corporativos, laboratórios e uso profissional.
 
+As especificações formais do projeto ficam em um repositório separado, sob o diretório `win/` como raiz comum:
+
+- `spec-win-toolkit/` para especificações, ADRs e backlog
+- `wba-windows-toolkit/` para scripts operacionais e módulos reutilizáveis
+
 ## Características
 
 - Compatível com Windows PowerShell 5.1
@@ -101,6 +106,8 @@ wba-windows-toolkit/
 ├── active-directory/
 ├── printers/
 ├── utilities/
+├── modules/
+├── tests/
 ├── docs/
 └── LICENSE
 ```
