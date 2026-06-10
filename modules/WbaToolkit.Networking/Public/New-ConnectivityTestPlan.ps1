@@ -1,4 +1,4 @@
-function New-ConnectivityTestPlan {
+﻿function New-ConnectivityTestPlan {
     <#
     .SYNOPSIS
         Cria um plano de teste de conectividade estruturado.

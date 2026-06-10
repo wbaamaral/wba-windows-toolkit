@@ -1,4 +1,4 @@
-function ConvertTo-ConsoleText {
+﻿function ConvertTo-ConsoleText {
     [CmdletBinding()]
     param(
         [Parameter(Mandatory = $false)]

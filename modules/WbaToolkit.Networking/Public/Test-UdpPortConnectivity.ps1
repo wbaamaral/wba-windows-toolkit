@@ -1,4 +1,4 @@
-function Test-UdpPortConnectivity {
+﻿function Test-UdpPortConnectivity {
     <#
     .SYNOPSIS
         Executa teste UDP básico e classifica o resultado como inconclusivo quando não há confirmação.

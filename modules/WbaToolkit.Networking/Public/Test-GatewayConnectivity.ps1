@@ -1,4 +1,4 @@
-function Test-GatewayConnectivity {
+﻿function Test-GatewayConnectivity {
     <#
     .SYNOPSIS
         Executa teste de conectividade com o gateway padrão.

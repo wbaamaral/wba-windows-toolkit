@@ -1,4 +1,4 @@
-function Test-DnsResolution {
+﻿function Test-DnsResolution {
     <#
     .SYNOPSIS
         Valida resolução DNS para um nome informado.

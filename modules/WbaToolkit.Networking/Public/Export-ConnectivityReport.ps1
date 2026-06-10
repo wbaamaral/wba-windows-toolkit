@@ -1,4 +1,4 @@
-function Export-ConnectivityReport {
+﻿function Export-ConnectivityReport {
     <#
     .SYNOPSIS
         Exporta o relatório de conectividade para HTML.

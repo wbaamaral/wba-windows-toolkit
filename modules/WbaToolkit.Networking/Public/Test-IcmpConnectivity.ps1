@@ -1,4 +1,4 @@
-function Test-IcmpConnectivity {
+﻿function Test-IcmpConnectivity {
     <#
     .SYNOPSIS
         Executa teste ICMP contra um destino informado.

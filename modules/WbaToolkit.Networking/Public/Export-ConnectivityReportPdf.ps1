@@ -1,4 +1,4 @@
-function Export-ConnectivityReportPdf {
+﻿function Export-ConnectivityReportPdf {
     <#
     .SYNOPSIS
         Exporta o relatório HTML para PDF quando houver navegador compatível.

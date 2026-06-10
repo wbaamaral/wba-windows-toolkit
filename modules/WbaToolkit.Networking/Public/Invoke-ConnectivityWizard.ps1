@@ -1,4 +1,4 @@
-function Invoke-ConnectivityWizard {
+﻿function Invoke-ConnectivityWizard {
     <#
     .SYNOPSIS
         Executa um wizard simples para o diagnóstico de conectividade.

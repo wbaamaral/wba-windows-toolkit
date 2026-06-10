@@ -1,4 +1,4 @@
-function Test-LocalTcpListener {
+﻿function Test-LocalTcpListener {
     <#
     .SYNOPSIS
         Verifica se há listener TCP local em uma porta.

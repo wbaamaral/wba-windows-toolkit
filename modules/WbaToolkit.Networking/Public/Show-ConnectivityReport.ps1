@@ -1,4 +1,4 @@
-function Show-ConnectivityReport {
+﻿function Show-ConnectivityReport {
     <#
     .SYNOPSIS
         Exibe o relatório de conectividade em tela.

@@ -1,4 +1,4 @@
-function ConvertTo-ConnectivityReportHtml {
+﻿function ConvertTo-ConnectivityReportHtml {
     [CmdletBinding()]
     param(
         [Parameter(Mandatory = $true)]
@@ -55,7 +55,8 @@ function ConvertTo-ConnectivityReportHtml {
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
-  <meta charset="UTF-8">
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+  <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Relatório de Conectividade</title>
   <style>

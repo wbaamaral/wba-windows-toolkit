@@ -91,6 +91,12 @@ Describe 'WbaToolkit.Networking' {
 
             $content = Get-Content -LiteralPath $export.Path -Raw
             $content | Should -Match 'Relat[óo]rio de Conectividade'
+            $content | Should -Match 'charset=utf-8'
+
+            $bytes = [System.IO.File]::ReadAllBytes($export.Path)
+            $bytes[0] | Should -Be 0xEF
+            $bytes[1] | Should -Be 0xBB
+            $bytes[2] | Should -Be 0xBF
         }
     }
 }
