@@ -19,7 +19,7 @@ As etapas são executadas em sequência obrigatória — uma etapa bloqueada imp
 |---|---|---|
 | 1 | Rede local | Adaptador ativo, endereço IP, gateway padrão configurado e servidores DNS configurados |
 | 2 | IP direto | Ping para `8.8.8.8`, `8.8.4.4`, `1.1.1.1` e `9.9.9.9` sem depender de DNS |
-| 3 | DNS | Resolução de nomes para `google.com`, `microsoft.com`, `cloudflare.com` e `conectividade.microsoft.com` |
+| 3 | DNS | Resolução de nomes para `google.com`, `microsoft.com`, `cloudflare.com` e `www.msftconnecttest.com` |
 | 4 | Domínios | Ping e teste de porta TCP 443 para hosts públicos validando conectividade de ponta a ponta |
 
 **Parâmetros:**
