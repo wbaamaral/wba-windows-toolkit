@@ -1,17 +1,20 @@
 ﻿function Export-ToolkitFunctionDocs {
     <#
     .SYNOPSIS
-        Gera documentacao HTML estatica das funcoes exportadas do toolkit.
+        Gera documentacao HTML estatica das funcoes exportadas e scripts do toolkit.
 
     .DESCRIPTION
-        Importa os modulos informados, le o Comment-Based Help com Get-Help e gera um conjunto de paginas HTML
-        locais com indice principal, paginas por modulo e paginas por funcao.
+        Importa os modulos informados, le o Comment-Based Help com Get-Help e gera paginas HTML locais com indice
+        principal, paginas por modulo, paginas por funcao e paginas de documentacao dos scripts operacionais.
 
     .PARAMETER ModulePath
         Caminho dos manifestos ou modulos PowerShell usados como fonte da documentacao.
 
     .PARAMETER OutputPath
         Diretorio de saida dos arquivos HTML. O padrao e docs-html na raiz atual.
+
+    .PARAMETER ScriptPath
+        Caminho dos scripts operacionais que devem ter a documentacao incluida no HTML.
 
     .PARAMETER Force
         Permite recriar arquivos em um diretorio existente.
@@ -35,6 +38,19 @@
         [string]$OutputPath = (Join-Path (Get-Location) 'docs-html'),
 
         [Parameter(Mandatory = $false)]
+        [string[]]$ScriptPath = @(
+            (Join-Path (Get-Location) 'active-directory/Diagnostico-GPO-Client.ps1'),
+            (Join-Path (Get-Location) 'active-directory/Testa-Repara-ContaMaquinaAD.ps1'),
+            (Join-Path (Get-Location) 'configuration/Configurar-Idioma-Regional.ps1'),
+            (Join-Path (Get-Location) 'diagnostics/Testar-conectividade-internet.ps1'),
+            (Join-Path (Get-Location) 'inventory/Inventario-Hardware-Software.ps1'),
+            (Join-Path (Get-Location) 'maintenance/limpeza-windows.ps1'),
+            (Join-Path (Get-Location) 'updates/upgrade-windows.ps1'),
+            (Join-Path (Get-Location) 'utilities/Analise-Espaco-Disco.ps1'),
+            (Join-Path (Get-Location) 'utilities/Remover-Perfis-Inativos.ps1')
+        ),
+
+        [Parameter(Mandatory = $false)]
         [switch]$Force
     )
 
@@ -48,11 +64,14 @@
 
     $moduleOutputPath = Join-Path $OutputPath 'modules'
     $functionOutputPath = Join-Path $OutputPath 'functions'
+    $scriptOutputPath = Join-Path $OutputPath 'scripts'
     New-Item -Path $moduleOutputPath -ItemType Directory -Force | Out-Null
     New-Item -Path $functionOutputPath -ItemType Directory -Force | Out-Null
+    New-Item -Path $scriptOutputPath -ItemType Directory -Force | Out-Null
 
     $encoding = [System.Text.UTF8Encoding]::new($true)
     $moduleDocs = [System.Collections.ArrayList]::new()
+    $scriptDocs = [System.Collections.ArrayList]::new()
 
     foreach ($path in $ModulePath) {
         $resolvedPath = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($path)
@@ -205,6 +224,87 @@ $moduleCards
         })
     }
 
+    foreach ($path in $ScriptPath) {
+        $resolvedPath = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($path)
+
+        if (-not (Test-Path -LiteralPath $resolvedPath)) {
+            Write-Warning "Script nao encontrado: $path"
+            continue
+        }
+
+        $scriptName = [System.IO.Path]::GetFileName($resolvedPath)
+        $scriptSlug = New-StaticDocsSlug -Name $scriptName
+        $scriptFile = "$scriptSlug.html"
+        $scriptRelativePath = "scripts/$scriptFile"
+        $scriptPagePath = Join-Path $scriptOutputPath $scriptFile
+        $scriptCategory = Split-Path -Leaf (Split-Path -Parent $resolvedPath)
+        $scriptContent = [System.IO.File]::ReadAllText($resolvedPath, [System.Text.Encoding]::UTF8)
+        $commentMatch = [regex]::Match($scriptContent, '(?s)<#(.*?)#>')
+        $sections = [ordered]@{}
+
+        if ($commentMatch.Success) {
+            $currentSection = 'Documentacao'
+            $sections[$currentSection] = [System.Collections.Generic.List[string]]::new()
+
+            foreach ($line in ($commentMatch.Groups[1].Value -split "\r?\n")) {
+                if ($line -match '^\s*\.(?<name>[A-Za-z0-9_-]+)\s*$') {
+                    $currentSection = $Matches.name
+                    if (-not $sections.Contains($currentSection)) {
+                        $sections[$currentSection] = [System.Collections.Generic.List[string]]::new()
+                    }
+                    continue
+                }
+
+                $sections[$currentSection].Add($line.TrimEnd())
+            }
+        }
+
+        $scriptSynopsis = if ($sections.Contains('SYNOPSIS')) {
+            (($sections['SYNOPSIS'] | Where-Object { -not [string]::IsNullOrWhiteSpace($_) }) -join ' ').Trim()
+        }
+        else {
+            'Documentacao operacional do script.'
+        }
+
+        $scriptSections = @($sections.Keys | Where-Object { $_ -ne 'Documentacao' } | ForEach-Object {
+            $sectionName = $_
+            $sectionText = (($sections[$sectionName] | ForEach-Object { $_.TrimEnd() }) -join "`r`n").Trim()
+            if (-not [string]::IsNullOrWhiteSpace($sectionText)) {
+                $sectionTitle = (Get-Culture).TextInfo.ToTitleCase($sectionName.ToLowerInvariant())
+                if ($sectionName -in @('USO', 'EXAMPLE', 'EXAMPLES')) {
+                    @"
+<h2>$([string](ConvertTo-HtmlSafe -Value $sectionTitle))</h2>
+<pre>$([string](ConvertTo-HtmlSafe -Value $sectionText))</pre>
+"@
+                }
+                else {
+                    @"
+<h2>$([string](ConvertTo-HtmlSafe -Value $sectionTitle))</h2>
+<p>$([string](ConvertTo-HtmlSafe -Value $sectionText))</p>
+"@
+                }
+            }
+        }) -join "`r`n"
+
+        $scriptBody = @"
+<p class="muted">Script operacional: <code>$([string](ConvertTo-HtmlSafe -Value $scriptName))</code></p>
+<p class="muted">Categoria: $([string](ConvertTo-HtmlSafe -Value $scriptCategory))</p>
+<h2>Como executar</h2>
+<pre>.\$([string](ConvertTo-HtmlSafe -Value $scriptName))</pre>
+$scriptSections
+"@
+
+        $scriptHtml = ConvertTo-StaticDocsHtml -Title $scriptName -Body $scriptBody -RelativePrefix '../'
+        [System.IO.File]::WriteAllText($scriptPagePath, $scriptHtml, $encoding)
+
+        $null = $scriptDocs.Add([pscustomobject]@{
+            Name = $scriptName
+            Category = $scriptCategory
+            Synopsis = $scriptSynopsis
+            RelativePath = $scriptRelativePath
+        })
+    }
+
     $indexCards = @($moduleDocs | ForEach-Object {
         @"
 <div class="card">
@@ -228,6 +328,16 @@ $moduleCards
         }
     }) -join "`r`n"
 
+    $scriptRows = @($scriptDocs | Sort-Object Category, Name | ForEach-Object {
+        @"
+<tr>
+  <td><a href="$($_.RelativePath)">$([string](ConvertTo-HtmlSafe -Value $_.Name))</a></td>
+  <td>$([string](ConvertTo-HtmlSafe -Value $_.Category))</td>
+  <td>$([string](ConvertTo-HtmlSafe -Value $_.Synopsis))</td>
+</tr>
+"@
+    }) -join "`r`n"
+
     $indexBody = @"
 <p class="muted">Gerado em $(Get-Date -Format 'dd/MM/yyyy HH:mm:ss'). Abra este arquivo localmente no navegador.</p>
 <h2>Modulos</h2>
@@ -239,6 +349,13 @@ $indexCards
   <thead><tr><th>Funcao</th><th>Modulo</th><th>Categoria</th><th>Resumo</th></tr></thead>
   <tbody>
 $allFunctionRows
+  </tbody>
+</table>
+<h2>Indice de scripts</h2>
+<table>
+  <thead><tr><th>Script</th><th>Categoria</th><th>Resumo</th></tr></thead>
+  <tbody>
+$scriptRows
   </tbody>
 </table>
 "@
@@ -253,5 +370,6 @@ $allFunctionRows
         OutputPath = $OutputPath
         ModuleCount = @($moduleDocs).Count
         FunctionCount = (@($moduleDocs | ForEach-Object { $_.FunctionCount }) | Measure-Object -Sum).Sum
+        ScriptCount = @($scriptDocs).Count
     }
 }
