@@ -116,7 +116,9 @@ Describe 'WbaToolkit.Core' {
             $result = Export-ToolkitFunctionDocs -ModulePath $modulePath -OutputPath $outputPath -Force
 
             Test-Path -LiteralPath $result.Path | Should -BeTrue
+            [System.IO.Path]::IsPathRooted($result.Path) | Should -BeTrue
             Test-Path -LiteralPath (Join-Path $outputPath 'functions/Export-ToolkitFunctionDocs.html') | Should -BeTrue
+            Test-Path -LiteralPath (Join-Path $outputPath 'functions/Get-StaticDocsMetadata.html') | Should -BeFalse
 
             $content = Get-Content -LiteralPath $result.Path -Raw
             $content | Should -Match 'Manual de Funcoes'
@@ -125,6 +127,29 @@ Describe 'WbaToolkit.Core' {
             $functionContent = Get-Content -LiteralPath (Join-Path $outputPath 'functions/Export-ToolkitFunctionDocs.html') -Raw
             $functionContent | Should -Match 'Metadados do manual'
             $functionContent | Should -Match 'Documentacao'
+        }
+
+        It 'Deve resolver caminho relativo de saida a partir da localizacao atual do PowerShell' {
+            $repoRoot = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
+            $modulePath = Join-Path $repoRoot 'modules/WbaToolkit.Core/WbaToolkit.Core.psd1'
+            $relativeOutputPath = '.wba-docs-test-' + [guid]::NewGuid().ToString()
+
+            Push-Location $repoRoot
+            try {
+                $result = Export-ToolkitFunctionDocs -ModulePath $modulePath -OutputPath $relativeOutputPath -Force
+
+                [System.IO.Path]::IsPathRooted($result.Path) | Should -BeTrue
+                $result.Path | Should -Match ([regex]::Escape($repoRoot))
+                Test-Path -LiteralPath $result.Path | Should -BeTrue
+                Test-Path -LiteralPath (Join-Path $repoRoot (Join-Path $relativeOutputPath 'index.html')) | Should -BeTrue
+            }
+            finally {
+                Pop-Location
+                $cleanupPath = Join-Path $repoRoot $relativeOutputPath
+                if (Test-Path -LiteralPath $cleanupPath) {
+                    Remove-Item -LiteralPath $cleanupPath -Recurse -Force
+                }
+            }
         }
     }
 }

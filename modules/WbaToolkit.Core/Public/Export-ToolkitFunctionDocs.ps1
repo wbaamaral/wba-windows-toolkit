@@ -40,6 +40,8 @@
 
     # WBA-DOCS: Category=Documentacao; Related=Get-Help,ConvertTo-HtmlSafe; Manual=Gera manual HTML estatico local
 
+    $OutputPath = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($OutputPath)
+
     if ((Test-Path -LiteralPath $OutputPath) -and -not $Force) {
         throw "O diretorio de saida ja existe. Use -Force para atualizar: $OutputPath"
     }
@@ -53,17 +55,19 @@
     $moduleDocs = [System.Collections.ArrayList]::new()
 
     foreach ($path in $ModulePath) {
-        if (-not (Test-Path -LiteralPath $path)) {
+        $resolvedPath = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($path)
+
+        if (-not (Test-Path -LiteralPath $resolvedPath)) {
             Write-Warning "Modulo nao encontrado: $path"
             continue
         }
 
-        $moduleName = [System.IO.Path]::GetFileNameWithoutExtension($path)
+        $moduleName = [System.IO.Path]::GetFileNameWithoutExtension($resolvedPath)
         $module = Get-Module -Name $moduleName | Select-Object -First 1
         if (-not $module) {
-            $module = Import-Module $path -Force -PassThru -ErrorAction Stop
+            $module = Import-Module $resolvedPath -Force -PassThru -ErrorAction Stop
         }
-        $commands = @(Get-Command -Module $module.Name -CommandType Function | Sort-Object Name)
+        $commands = @($module.ExportedFunctions.Values | Sort-Object Name)
         $functionLinks = [System.Collections.ArrayList]::new()
 
         foreach ($command in $commands) {
