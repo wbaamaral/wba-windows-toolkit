@@ -37,6 +37,9 @@
       relatorio-inventario-<COMPUTERNAME>-<yyyy-MM-dd_HHmmss>.html  Relatorio principal
       relatorio-inventario-<COMPUTERNAME>-<yyyy-MM-dd_HHmmss>.pdf   Versao em PDF (se disponivel)
       logs\inventario-<yyyy-MM-dd_HHmmss>.log                      Transcript de execucao
+      resumo-hardware-drivers.txt                                  Resumo enxuto opcional
+      resumo-hardware-drivers.md                                   Resumo enxuto opcional
+      resumo-hardware-drivers.json                                 Resumo estruturado opcional
 
 .PARAMETER OutputDir
     Raiz de relatorios escolhida pelo usuario. Quando omitido, usa ReportsRoot persistente do toolkit ou
@@ -54,6 +57,15 @@
       - A conversao PDF nao e necessaria (envio por e-mail do HTML)
       - Execucao em ambientes sem interface grafica (Server Core)
 
+.PARAMETER GerarResumoHardwareDrivers
+    Gera, alem do inventario completo, um resumo enxuto de hardware e drivers ativos em TXT, Markdown e/ou JSON.
+
+.PARAMETER SomenteHardwareDrivers
+    Gera apenas o resumo enxuto de hardware e drivers ativos. Nao gera HTML, PDF nem inventario completo.
+
+.PARAMETER FormatoResumoHardwareDrivers
+    Define o formato do resumo enxuto: Txt, Markdown, Json ou Todos.
+
 .EXAMPLE
     .\Inventario-Hardware-Software.ps1
 
@@ -70,6 +82,16 @@
     .\Inventario-Hardware-Software.ps1 -NaoPDF
 
     Gera apenas o HTML na pasta padronizada de relatorios, sem tentativa de conversao para PDF.
+
+.EXAMPLE
+    .\Inventario-Hardware-Software.ps1 -SomenteHardwareDrivers
+
+    Gera somente o resumo enxuto de hardware e drivers ativos.
+
+.EXAMPLE
+    .\Inventario-Hardware-Software.ps1 -GerarResumoHardwareDrivers -NaoPDF
+
+    Gera o inventario completo em HTML e tambem o resumo enxuto de hardware e drivers ativos.
 
 .EXAMPLE
     .\Inventario-Hardware-Software.ps1 -OutputDir "\\srv-files\TI\Inventarios" -NaoPDF
@@ -95,7 +117,12 @@
 [CmdletBinding()]
 param(
     [string]$OutputDir,
-    [switch]$NaoPDF
+    [switch]$NaoPDF,
+    [switch]$GerarResumoHardwareDrivers,
+    [switch]$SomenteHardwareDrivers,
+
+    [ValidateSet('Txt', 'Markdown', 'Json', 'Todos')]
+    [string]$FormatoResumoHardwareDrivers = 'Todos'
 )
 
 Set-StrictMode -Version 2.0
@@ -144,6 +171,604 @@ function New-KvRow {
     return "<tr><th>$Key</th><td>$Val</td></tr>"
 }
 
+function Format-ToolkitValue {
+    param(
+        [AllowNull()]
+        $Value,
+
+        [string]$Default = 'N/I'
+    )
+
+    if ($null -eq $Value) { return $Default }
+    if ($Value -is [bool]) {
+        if ($Value) { return 'Sim' }
+        return 'Nao'
+    }
+    if ($Value -is [array]) {
+        $items = @($Value | Where-Object { -not [string]::IsNullOrWhiteSpace([string]$_) })
+        if ($items.Count -eq 0) { return $Default }
+        return ($items -join ', ')
+    }
+    if ([string]::IsNullOrWhiteSpace([string]$Value)) { return $Default }
+    return [string]$Value
+}
+
+function Convert-CimDateSafe {
+    param([AllowNull()]$Value)
+
+    if ($null -eq $Value) { return $null }
+    if ($Value -is [datetime]) { return $Value }
+
+    try {
+        return [System.Management.ManagementDateTimeConverter]::ToDateTime([string]$Value)
+    }
+    catch {
+        try { return [datetime]$Value } catch { return $null }
+    }
+}
+
+function Format-ToolkitDate {
+    param([AllowNull()]$Value)
+
+    $date = Convert-CimDateSafe -Value $Value
+    if ($null -eq $date) { return $null }
+    return $date.ToString('yyyy-MM-dd')
+}
+
+function Get-SafeCimInstance {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$ClassName,
+
+        [string]$Filter
+    )
+
+    try {
+        if ([string]::IsNullOrWhiteSpace($Filter)) {
+            return @(Get-CimInstance -ClassName $ClassName -ErrorAction Stop)
+        }
+
+        return @(Get-CimInstance -ClassName $ClassName -Filter $Filter -ErrorAction Stop)
+    }
+    catch {
+        Write-Warn "Falha ao consultar $ClassName. $($_.Exception.Message)"
+        return @()
+    }
+}
+
+function Find-PnpSignedDriver {
+    param(
+        [string]$PnpDeviceId,
+        [array]$SignedDrivers
+    )
+
+    if ([string]::IsNullOrWhiteSpace($PnpDeviceId) -or $null -eq $SignedDrivers) {
+        return $null
+    }
+
+    foreach ($driver in @($SignedDrivers)) {
+        if ($null -eq $driver -or [string]::IsNullOrWhiteSpace([string]$driver.DeviceID)) {
+            continue
+        }
+
+        $deviceId = [string]$driver.DeviceID
+        if ($deviceId -eq $PnpDeviceId) {
+            return $driver
+        }
+
+        try {
+            if ($deviceId -match [regex]::Escape($PnpDeviceId) -or $PnpDeviceId -match [regex]::Escape($deviceId)) {
+                return $driver
+            }
+        }
+        catch {
+            continue
+        }
+    }
+
+    return $null
+}
+
+function New-DriverInfoObject {
+    param([AllowNull()]$Driver)
+
+    if ($null -eq $Driver) {
+        return [pscustomobject]@{
+            provider = $null
+            version = $null
+            date = $null
+            infName = $null
+            isSigned = $null
+            signer = $null
+            driverName = $null
+        }
+    }
+
+    return [pscustomobject]@{
+        provider = $Driver.DriverProviderName
+        version = $Driver.DriverVersion
+        date = (Format-ToolkitDate -Value $Driver.DriverDate)
+        infName = $Driver.InfName
+        isSigned = if ($null -ne $Driver.IsSigned) { [bool]$Driver.IsSigned } else { $null }
+        signer = $Driver.Signer
+        driverName = $Driver.DriverName
+    }
+}
+
+function Get-HardwareDriverSummary {
+    [CmdletBinding()]
+    param()
+
+    Write-Info 'Coletando resumo de hardware e drivers ativos...'
+
+    $os = @(Get-SafeCimInstance -ClassName 'Win32_OperatingSystem') | Select-Object -First 1
+    $cs = @(Get-SafeCimInstance -ClassName 'Win32_ComputerSystem') | Select-Object -First 1
+    $bios = @(Get-SafeCimInstance -ClassName 'Win32_BIOS') | Select-Object -First 1
+    $processors = @(Get-SafeCimInstance -ClassName 'Win32_Processor')
+    $memoryModules = @(Get-SafeCimInstance -ClassName 'Win32_PhysicalMemory')
+    $videoControllers = @(Get-SafeCimInstance -ClassName 'Win32_VideoController')
+    $monitors = @(Get-SafeCimInstance -ClassName 'Win32_DesktopMonitor')
+    $monitorEntities = @(Get-SafeCimInstance -ClassName 'Win32_PnPEntity' -Filter "PNPClass='Monitor'")
+    $diskDrives = @(Get-SafeCimInstance -ClassName 'Win32_DiskDrive')
+    $ideControllers = @(Get-SafeCimInstance -ClassName 'Win32_IDEController')
+    $scsiControllers = @(Get-SafeCimInstance -ClassName 'Win32_SCSIController')
+    $networkAdapters = @(Get-SafeCimInstance -ClassName 'Win32_NetworkAdapter' | Where-Object {
+        $_.PhysicalAdapter -eq $true -and $_.NetEnabled -eq $true
+    })
+    $networkConfigs = @(Get-SafeCimInstance -ClassName 'Win32_NetworkAdapterConfiguration' -Filter 'IPEnabled=True')
+    $audioDevices = @(Get-SafeCimInstance -ClassName 'Win32_SoundDevice')
+    $pnpEntities = @(Get-SafeCimInstance -ClassName 'Win32_PnPEntity')
+    $signedDrivers = @(Get-SafeCimInstance -ClassName 'Win32_PnPSignedDriver')
+
+    $domainOrWorkgroup = if ($cs -and $cs.PartOfDomain) { $cs.Domain } elseif ($cs) { $cs.Workgroup } else { $null }
+    $lastBoot = if ($os) { Convert-CimDateSafe -Value $os.LastBootUpTime } else { $null }
+    $totalMemory = if ($cs -and $cs.TotalPhysicalMemory) { [int64]$cs.TotalPhysicalMemory } else { $null }
+
+    $video = @($videoControllers | ForEach-Object {
+        $driver = Find-PnpSignedDriver -PnpDeviceId $_.PNPDeviceID -SignedDrivers $signedDrivers
+        $driverInfo = New-DriverInfoObject -Driver $driver
+        $resolution = if ($_.CurrentHorizontalResolution -and $_.CurrentVerticalResolution) {
+            '{0} x {1}' -f $_.CurrentHorizontalResolution, $_.CurrentVerticalResolution
+        }
+        else {
+            $null
+        }
+
+        [pscustomobject]@{
+            name = $_.Name
+            manufacturer = $_.AdapterCompatibility
+            status = $_.Status
+            currentResolution = $resolution
+            currentVideoMode = $_.VideoModeDescription
+            driverVersion = if ($driverInfo.version) { $driverInfo.version } else { $_.DriverVersion }
+            driverDate = if ($driverInfo.date) { $driverInfo.date } else { Format-ToolkitDate -Value $_.DriverDate }
+            driverProvider = $driverInfo.provider
+            infName = $driverInfo.infName
+            pnpDeviceId = $_.PNPDeviceID
+            isSigned = $driverInfo.isSigned
+            signer = $driverInfo.signer
+            driverName = $driverInfo.driverName
+        }
+    })
+
+    $storage = @($diskDrives | ForEach-Object {
+        $driver = Find-PnpSignedDriver -PnpDeviceId $_.PNPDeviceID -SignedDrivers $signedDrivers
+        $driverInfo = New-DriverInfoObject -Driver $driver
+        [pscustomobject]@{
+            model = $_.Model
+            interfaceType = $_.InterfaceType
+            mediaType = $_.MediaType
+            sizeBytes = if ($_.Size) { [int64]$_.Size } else { $null }
+            size = if ($_.Size) { Format-FileSize ([int64]$_.Size) } else { $null }
+            status = $_.Status
+            pnpDeviceId = $_.PNPDeviceID
+            driverProvider = $driverInfo.provider
+            driverVersion = $driverInfo.version
+            driverDate = $driverInfo.date
+            infName = $driverInfo.infName
+        }
+    })
+
+    $storageControllers = @(@($ideControllers) + @($scsiControllers) | Where-Object { $null -ne $_ } | ForEach-Object {
+        $driver = Find-PnpSignedDriver -PnpDeviceId $_.PNPDeviceID -SignedDrivers $signedDrivers
+        $driverInfo = New-DriverInfoObject -Driver $driver
+        [pscustomobject]@{
+            name = $_.Name
+            manufacturer = $_.Manufacturer
+            pnpDeviceId = $_.PNPDeviceID
+            status = $_.Status
+            driverProvider = $driverInfo.provider
+            driverVersion = $driverInfo.version
+            driverDate = $driverInfo.date
+            infName = $driverInfo.infName
+        }
+    })
+
+    $network = @($networkAdapters | ForEach-Object {
+        $adapter = $_
+        $config = $networkConfigs | Where-Object { $_.Index -eq $adapter.Index } | Select-Object -First 1
+        $driver = Find-PnpSignedDriver -PnpDeviceId $adapter.PNPDeviceID -SignedDrivers $signedDrivers
+        $driverInfo = New-DriverInfoObject -Driver $driver
+        [pscustomobject]@{
+            name = $adapter.Name
+            description = $adapter.Description
+            macAddress = $adapter.MACAddress
+            speed = if ($adapter.Speed) { [string]$adapter.Speed } else { $null }
+            status = $adapter.NetConnectionStatus
+            pnpDeviceId = $adapter.PNPDeviceID
+            ipAddress = if ($config) { @($config.IPAddress) } else { @() }
+            driverProvider = $driverInfo.provider
+            driverVersion = $driverInfo.version
+            driverDate = $driverInfo.date
+            infName = $driverInfo.infName
+        }
+    })
+
+    $audio = @($audioDevices | ForEach-Object {
+        $driver = Find-PnpSignedDriver -PnpDeviceId $_.PNPDeviceID -SignedDrivers $signedDrivers
+        $driverInfo = New-DriverInfoObject -Driver $driver
+        [pscustomobject]@{
+            name = $_.Name
+            manufacturer = $_.Manufacturer
+            pnpDeviceId = $_.PNPDeviceID
+            status = $_.Status
+            driverProvider = $driverInfo.provider
+            driverVersion = $driverInfo.version
+            driverDate = $driverInfo.date
+            infName = $driverInfo.infName
+        }
+    })
+
+    $monitorRows = @()
+    if ($monitorEntities.Count -gt 0) {
+        $monitorRows = @($monitorEntities | ForEach-Object {
+            [pscustomobject]@{
+                name = $_.Name
+                manufacturer = $_.Manufacturer
+                pnpDeviceId = $_.PNPDeviceID
+                status = $_.Status
+            }
+        })
+    }
+    else {
+        $monitorRows = @($monitors | ForEach-Object {
+            [pscustomobject]@{
+                name = $_.Name
+                manufacturer = $_.MonitorManufacturer
+                pnpDeviceId = $_.PNPDeviceID
+                status = $_.Status
+            }
+        })
+    }
+
+    $problemDevices = @($pnpEntities | Where-Object {
+        ($_.Status -and $_.Status -ne 'OK') -or ($null -ne $_.ConfigManagerErrorCode -and [int]$_.ConfigManagerErrorCode -ne 0)
+    } | ForEach-Object {
+        [pscustomobject]@{
+            name = $_.Name
+            class = $_.PNPClass
+            pnpDeviceId = $_.PNPDeviceID
+            status = $_.Status
+            configManagerErrorCode = $_.ConfigManagerErrorCode
+        }
+    })
+
+    return [pscustomobject]@{
+        generatedAt = (Get-Date).ToString('yyyy-MM-dd HH:mm:ss')
+        computer = [pscustomobject]@{
+            name = $env:COMPUTERNAME
+            user = [System.Security.Principal.WindowsIdentity]::GetCurrent().Name
+            domain = $domainOrWorkgroup
+            manufacturer = if ($cs) { $cs.Manufacturer } else { $null }
+            model = if ($cs) { $cs.Model } else { $null }
+            serialNumber = if ($bios) { $bios.SerialNumber } else { $null }
+        }
+        operatingSystem = [pscustomobject]@{
+            caption = if ($os) { $os.Caption } else { $null }
+            version = if ($os) { $os.Version } else { $null }
+            buildNumber = if ($os) { $os.BuildNumber } else { $null }
+            architecture = if ($os) { $os.OSArchitecture } else { $null }
+            lastBootUpTime = if ($lastBoot) { $lastBoot.ToString('s') } else { $null }
+        }
+        processor = @($processors | ForEach-Object {
+            [pscustomobject]@{
+                name = $_.Name
+                manufacturer = $_.Manufacturer
+                physicalCores = $_.NumberOfCores
+                logicalProcessors = $_.NumberOfLogicalProcessors
+                currentClockMHz = $_.CurrentClockSpeed
+                maxClockMHz = $_.MaxClockSpeed
+                status = $_.Status
+            }
+        })
+        memory = [pscustomobject]@{
+            totalInstalledBytes = $totalMemory
+            totalInstalled = if ($totalMemory) { Format-FileSize $totalMemory } else { $null }
+            modules = @($memoryModules | ForEach-Object {
+                [pscustomobject]@{
+                    bank = $_.BankLabel
+                    slot = $_.DeviceLocator
+                    capacityBytes = if ($_.Capacity) { [int64]$_.Capacity } else { $null }
+                    capacity = if ($_.Capacity) { Format-FileSize ([int64]$_.Capacity) } else { $null }
+                    manufacturer = $_.Manufacturer
+                    partNumber = $_.PartNumber
+                    speedMHz = $_.Speed
+                    serialNumber = $_.SerialNumber
+                }
+            })
+        }
+        video = $video
+        monitors = $monitorRows
+        storage = $storage
+        storageControllers = $storageControllers
+        network = $network
+        audio = $audio
+        problemDevices = $problemDevices
+    }
+}
+
+function Add-SummaryLines {
+    param(
+        [System.Collections.Generic.List[string]]$Lines,
+        [string]$Title,
+        [array]$Items,
+        [System.Collections.IDictionary]$Fields
+    )
+
+    $Lines.Add('')
+    $Lines.Add('------------------------------------------------------------')
+    $Lines.Add((' {0}' -f $Title))
+    $Lines.Add('------------------------------------------------------------')
+
+    if (@($Items).Count -eq 0) {
+        $Lines.Add('Nenhum registro encontrado.')
+        return
+    }
+
+    $index = 1
+    foreach ($item in @($Items)) {
+        if (@($Items).Count -gt 1) {
+            $Lines.Add('')
+            $Lines.Add(('[{0}]' -f $index))
+        }
+        foreach ($key in $Fields.Keys) {
+            $value = $item.($Fields[$key])
+            $Lines.Add(('{0,-24}: {1}' -f $key, (Format-ToolkitValue $value)))
+        }
+        $index++
+    }
+}
+
+function Export-HardwareDriverSummaryTxt {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory = $true)]$Summary,
+        [Parameter(Mandatory = $true)][string]$Path
+    )
+
+    $lines = [System.Collections.Generic.List[string]]::new()
+    $lines.Add('============================================================')
+    $lines.Add(' RESUMO DE HARDWARE E DRIVERS ATIVOS')
+    $lines.Add('============================================================')
+    $lines.Add('')
+    $lines.Add(('Computador              : {0}' -f (Format-ToolkitValue $Summary.computer.name)))
+    $lines.Add(('Usuario                 : {0}' -f (Format-ToolkitValue $Summary.computer.user)))
+    $lines.Add(('Dominio/Grupo           : {0}' -f (Format-ToolkitValue $Summary.computer.domain)))
+    $lines.Add(('Fabricante              : {0}' -f (Format-ToolkitValue $Summary.computer.manufacturer)))
+    $lines.Add(('Modelo                  : {0}' -f (Format-ToolkitValue $Summary.computer.model)))
+    $lines.Add(('Numero de serie         : {0}' -f (Format-ToolkitValue $Summary.computer.serialNumber)))
+    $lines.Add(('Windows                 : {0}' -f (Format-ToolkitValue $Summary.operatingSystem.caption)))
+    $lines.Add(('Versao                  : {0}' -f (Format-ToolkitValue $Summary.operatingSystem.version)))
+    $lines.Add(('Build                   : {0}' -f (Format-ToolkitValue $Summary.operatingSystem.buildNumber)))
+    $lines.Add(('Arquitetura             : {0}' -f (Format-ToolkitValue $Summary.operatingSystem.architecture)))
+    $lines.Add(('Ultimo boot             : {0}' -f (Format-ToolkitValue $Summary.operatingSystem.lastBootUpTime)))
+    $lines.Add(('Execucao                : {0}' -f (Format-ToolkitValue $Summary.generatedAt)))
+
+    Add-SummaryLines -Lines $lines -Title 'PROCESSADOR' -Items $Summary.processor -Fields ([ordered]@{
+        'Nome' = 'name'; 'Fabricante' = 'manufacturer'; 'Nucleos fisicos' = 'physicalCores';
+        'Threads/logicos' = 'logicalProcessors'; 'Clock atual MHz' = 'currentClockMHz';
+        'Clock max MHz' = 'maxClockMHz'; 'Status' = 'status'
+    })
+
+    $lines.Add('')
+    $lines.Add('------------------------------------------------------------')
+    $lines.Add(' MEMORIA')
+    $lines.Add('------------------------------------------------------------')
+    $lines.Add(('Total instalado         : {0}' -f (Format-ToolkitValue $Summary.memory.totalInstalled)))
+    Add-SummaryLines -Lines $lines -Title 'MODULOS DE MEMORIA' -Items $Summary.memory.modules -Fields ([ordered]@{
+        'Banco' = 'bank'; 'Slot' = 'slot'; 'Capacidade' = 'capacity'; 'Fabricante' = 'manufacturer';
+        'Part number' = 'partNumber'; 'Velocidade MHz' = 'speedMHz'; 'Serial' = 'serialNumber'
+    })
+
+    Add-SummaryLines -Lines $lines -Title 'VIDEO / GPU' -Items $Summary.video -Fields ([ordered]@{
+        'GPU' = 'name'; 'Fabricante' = 'manufacturer'; 'Status' = 'status'; 'Resolucao atual' = 'currentResolution';
+        'Modo de video' = 'currentVideoMode'; 'Versao do driver' = 'driverVersion'; 'Data do driver' = 'driverDate';
+        'Provider' = 'driverProvider'; 'INF' = 'infName'; 'PNPDeviceID' = 'pnpDeviceId'; 'Driver assinado' = 'isSigned';
+        'Arquivo driver' = 'driverName'
+    })
+
+    Add-SummaryLines -Lines $lines -Title 'MONITORES' -Items $Summary.monitors -Fields ([ordered]@{
+        'Nome' = 'name'; 'Fabricante' = 'manufacturer'; 'PNPDeviceID' = 'pnpDeviceId'; 'Status' = 'status'
+    })
+
+    Add-SummaryLines -Lines $lines -Title 'ARMAZENAMENTO' -Items $Summary.storage -Fields ([ordered]@{
+        'Modelo' = 'model'; 'Interface' = 'interfaceType'; 'Tipo de midia' = 'mediaType'; 'Tamanho' = 'size';
+        'Status' = 'status'; 'PNPDeviceID' = 'pnpDeviceId'; 'Provider' = 'driverProvider';
+        'Versao driver' = 'driverVersion'; 'Data driver' = 'driverDate'; 'INF' = 'infName'
+    })
+
+    Add-SummaryLines -Lines $lines -Title 'CONTROLADORAS DE ARMAZENAMENTO' -Items $Summary.storageControllers -Fields ([ordered]@{
+        'Nome' = 'name'; 'Fabricante' = 'manufacturer'; 'PNPDeviceID' = 'pnpDeviceId'; 'Status' = 'status';
+        'Provider' = 'driverProvider'; 'Versao driver' = 'driverVersion'; 'Data driver' = 'driverDate'; 'INF' = 'infName'
+    })
+
+    Add-SummaryLines -Lines $lines -Title 'REDE' -Items $Summary.network -Fields ([ordered]@{
+        'Nome' = 'name'; 'Descricao' = 'description'; 'MAC' = 'macAddress'; 'Velocidade' = 'speed';
+        'Status' = 'status'; 'IP' = 'ipAddress'; 'Provider' = 'driverProvider';
+        'Versao driver' = 'driverVersion'; 'Data driver' = 'driverDate'; 'INF' = 'infName'; 'PNPDeviceID' = 'pnpDeviceId'
+    })
+
+    Add-SummaryLines -Lines $lines -Title 'AUDIO' -Items $Summary.audio -Fields ([ordered]@{
+        'Nome' = 'name'; 'Fabricante' = 'manufacturer'; 'PNPDeviceID' = 'pnpDeviceId'; 'Status' = 'status';
+        'Provider' = 'driverProvider'; 'Versao driver' = 'driverVersion'; 'Data driver' = 'driverDate'; 'INF' = 'infName'
+    })
+
+    Add-SummaryLines -Lines $lines -Title 'DISPOSITIVOS PROBLEMATICOS' -Items $Summary.problemDevices -Fields ([ordered]@{
+        'Nome' = 'name'; 'Classe' = 'class'; 'PNPDeviceID' = 'pnpDeviceId'; 'Status' = 'status';
+        'Codigo de erro' = 'configManagerErrorCode'
+    })
+
+    $encoding = [System.Text.UTF8Encoding]::new($true)
+    [System.IO.File]::WriteAllText($Path, ($lines -join [Environment]::NewLine), $encoding)
+}
+
+function ConvertTo-MarkdownValue {
+    param([AllowNull()]$Value)
+    return (Format-ToolkitValue $Value) -replace '\|', '\|'
+}
+
+function Add-MarkdownTable {
+    param(
+        [System.Collections.Generic.List[string]]$Lines,
+        [string]$Title,
+        [array]$Items,
+        [System.Collections.IDictionary]$Fields
+    )
+
+    $Lines.Add('')
+    $Lines.Add("## $Title")
+    $Lines.Add('')
+
+    if (@($Items).Count -eq 0) {
+        $Lines.Add('Nenhum registro encontrado.')
+        return
+    }
+
+    $index = 1
+    foreach ($item in @($Items)) {
+        if (@($Items).Count -gt 1) {
+            $Lines.Add('')
+            $Lines.Add("### Item $index")
+            $Lines.Add('')
+        }
+        $Lines.Add('| Campo | Valor |')
+        $Lines.Add('|---|---|')
+        foreach ($key in $Fields.Keys) {
+            $Lines.Add('| {0} | {1} |' -f $key, (ConvertTo-MarkdownValue $item.($Fields[$key])))
+        }
+        $index++
+    }
+}
+
+function Export-HardwareDriverSummaryMarkdown {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory = $true)]$Summary,
+        [Parameter(Mandatory = $true)][string]$Path
+    )
+
+    $lines = [System.Collections.Generic.List[string]]::new()
+    $lines.Add('# Resumo de Hardware e Drivers Ativos')
+    $lines.Add('')
+    $lines.Add('| Campo | Valor |')
+    $lines.Add('|---|---|')
+    $lines.Add('| Computador | {0} |' -f (ConvertTo-MarkdownValue $Summary.computer.name))
+    $lines.Add('| Usuario | {0} |' -f (ConvertTo-MarkdownValue $Summary.computer.user))
+    $lines.Add('| Dominio/Grupo | {0} |' -f (ConvertTo-MarkdownValue $Summary.computer.domain))
+    $lines.Add('| Fabricante | {0} |' -f (ConvertTo-MarkdownValue $Summary.computer.manufacturer))
+    $lines.Add('| Modelo | {0} |' -f (ConvertTo-MarkdownValue $Summary.computer.model))
+    $lines.Add('| Numero de serie | {0} |' -f (ConvertTo-MarkdownValue $Summary.computer.serialNumber))
+    $lines.Add('| Windows | {0} |' -f (ConvertTo-MarkdownValue $Summary.operatingSystem.caption))
+    $lines.Add('| Build | {0} |' -f (ConvertTo-MarkdownValue $Summary.operatingSystem.buildNumber))
+    $lines.Add('| Arquitetura | {0} |' -f (ConvertTo-MarkdownValue $Summary.operatingSystem.architecture))
+    $lines.Add('| Ultimo boot | {0} |' -f (ConvertTo-MarkdownValue $Summary.operatingSystem.lastBootUpTime))
+    $lines.Add('| Execucao | {0} |' -f (ConvertTo-MarkdownValue $Summary.generatedAt))
+
+    Add-MarkdownTable -Lines $lines -Title 'Processador' -Items $Summary.processor -Fields ([ordered]@{
+        'Nome' = 'name'; 'Fabricante' = 'manufacturer'; 'Nucleos fisicos' = 'physicalCores'; 'Threads/logicos' = 'logicalProcessors';
+        'Clock atual MHz' = 'currentClockMHz'; 'Clock max MHz' = 'maxClockMHz'; 'Status' = 'status'
+    })
+    Add-MarkdownTable -Lines $lines -Title 'Memoria - Modulos' -Items $Summary.memory.modules -Fields ([ordered]@{
+        'Banco' = 'bank'; 'Slot' = 'slot'; 'Capacidade' = 'capacity'; 'Fabricante' = 'manufacturer';
+        'Part number' = 'partNumber'; 'Velocidade MHz' = 'speedMHz'; 'Serial' = 'serialNumber'
+    })
+    Add-MarkdownTable -Lines $lines -Title 'Video / GPU' -Items $Summary.video -Fields ([ordered]@{
+        'GPU' = 'name'; 'Fabricante' = 'manufacturer'; 'Status' = 'status'; 'Resolucao atual' = 'currentResolution';
+        'Modo de video' = 'currentVideoMode'; 'Versao do driver' = 'driverVersion'; 'Data do driver' = 'driverDate';
+        'Provider' = 'driverProvider'; 'INF' = 'infName'; 'PNPDeviceID' = 'pnpDeviceId'; 'Driver assinado' = 'isSigned';
+        'Arquivo driver' = 'driverName'
+    })
+    Add-MarkdownTable -Lines $lines -Title 'Monitores' -Items $Summary.monitors -Fields ([ordered]@{
+        'Nome' = 'name'; 'Fabricante' = 'manufacturer'; 'PNPDeviceID' = 'pnpDeviceId'; 'Status' = 'status'
+    })
+    Add-MarkdownTable -Lines $lines -Title 'Armazenamento' -Items $Summary.storage -Fields ([ordered]@{
+        'Modelo' = 'model'; 'Interface' = 'interfaceType'; 'Tipo de midia' = 'mediaType'; 'Tamanho' = 'size';
+        'Status' = 'status'; 'PNPDeviceID' = 'pnpDeviceId'; 'Provider' = 'driverProvider';
+        'Versao driver' = 'driverVersion'; 'Data driver' = 'driverDate'; 'INF' = 'infName'
+    })
+    Add-MarkdownTable -Lines $lines -Title 'Controladoras de Armazenamento' -Items $Summary.storageControllers -Fields ([ordered]@{
+        'Nome' = 'name'; 'Fabricante' = 'manufacturer'; 'PNPDeviceID' = 'pnpDeviceId'; 'Status' = 'status';
+        'Provider' = 'driverProvider'; 'Versao driver' = 'driverVersion'; 'Data driver' = 'driverDate'; 'INF' = 'infName'
+    })
+    Add-MarkdownTable -Lines $lines -Title 'Rede' -Items $Summary.network -Fields ([ordered]@{
+        'Nome' = 'name'; 'Descricao' = 'description'; 'MAC' = 'macAddress'; 'Velocidade' = 'speed';
+        'Status' = 'status'; 'IP' = 'ipAddress'; 'Provider' = 'driverProvider';
+        'Versao driver' = 'driverVersion'; 'Data driver' = 'driverDate'; 'INF' = 'infName'; 'PNPDeviceID' = 'pnpDeviceId'
+    })
+    Add-MarkdownTable -Lines $lines -Title 'Audio' -Items $Summary.audio -Fields ([ordered]@{
+        'Nome' = 'name'; 'Fabricante' = 'manufacturer'; 'PNPDeviceID' = 'pnpDeviceId'; 'Status' = 'status';
+        'Provider' = 'driverProvider'; 'Versao driver' = 'driverVersion'; 'Data driver' = 'driverDate'; 'INF' = 'infName'
+    })
+    Add-MarkdownTable -Lines $lines -Title 'Dispositivos Problematicos' -Items $Summary.problemDevices -Fields ([ordered]@{
+        'Nome' = 'name'; 'Classe' = 'class'; 'PNPDeviceID' = 'pnpDeviceId'; 'Status' = 'status';
+        'Codigo de erro' = 'configManagerErrorCode'
+    })
+
+    $encoding = [System.Text.UTF8Encoding]::new($true)
+    [System.IO.File]::WriteAllText($Path, ($lines -join [Environment]::NewLine), $encoding)
+}
+
+function Export-HardwareDriverSummaryJson {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory = $true)]$Summary,
+        [Parameter(Mandatory = $true)][string]$Path
+    )
+
+    $encoding = [System.Text.UTF8Encoding]::new($true)
+    [System.IO.File]::WriteAllText($Path, ($Summary | ConvertTo-Json -Depth 8), $encoding)
+}
+
+function Export-HardwareDriverSummary {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory = $true)]$Summary,
+        [Parameter(Mandatory = $true)][string]$OutputDir,
+        [Parameter(Mandatory = $true)][string]$Format
+    )
+
+    $result = [ordered]@{}
+
+    if ($Format -in @('Txt', 'Todos')) {
+        $path = Join-Path $OutputDir 'resumo-hardware-drivers.txt'
+        Export-HardwareDriverSummaryTxt -Summary $Summary -Path $path
+        $result.Txt = $path
+    }
+    if ($Format -in @('Markdown', 'Todos')) {
+        $path = Join-Path $OutputDir 'resumo-hardware-drivers.md'
+        Export-HardwareDriverSummaryMarkdown -Summary $Summary -Path $path
+        $result.Markdown = $path
+    }
+    if ($Format -in @('Json', 'Todos')) {
+        $path = Join-Path $OutputDir 'resumo-hardware-drivers.json'
+        Export-HardwareDriverSummaryJson -Summary $Summary -Path $path
+        $result.Json = $path
+    }
+
+    return [pscustomobject]$result
+}
+
 # ---------------------------------------------------------------------------
 # Preparacao de paths
 # ---------------------------------------------------------------------------
@@ -157,17 +782,47 @@ $OutputDir = $ReportSession.Path
 $HtmlFile = Join-Path $OutputDir "relatorio-inventario-$env:COMPUTERNAME-$Timestamp.html"
 $PdfFile  = Join-Path $OutputDir "relatorio-inventario-$env:COMPUTERNAME-$Timestamp.pdf"
 $LogFile  = Join-Path $ReportSession.LogsPath "inventario-$Timestamp.log"
+$HardwareDriverSummaryFiles = $null
 
 Start-Transcript -Path $LogFile -Force | Out-Null
 
 # ---------------------------------------------------------------------------
 # COLETA DE DADOS
 # ---------------------------------------------------------------------------
-Write-Title 'INVENTARIO DE HARDWARE E SOFTWARE'
+if ($SomenteHardwareDrivers) {
+    Write-Title 'RESUMO DE HARDWARE E DRIVERS ATIVOS'
+}
+else {
+    Write-Title 'INVENTARIO DE HARDWARE E SOFTWARE'
+}
 Write-Info  "Computador : $env:COMPUTERNAME"
 Write-Info  "Data/Hora  : $DataHora"
 Write-Info  "Destino    : $OutputDir"
 Write-Info  "Logs       : $($ReportSession.LogsPath)"
+
+if ($GerarResumoHardwareDrivers -or $SomenteHardwareDrivers) {
+    $hardwareDriverSummary = Get-HardwareDriverSummary
+    $HardwareDriverSummaryFiles = Export-HardwareDriverSummary `
+        -Summary $hardwareDriverSummary `
+        -OutputDir $OutputDir `
+        -Format $FormatoResumoHardwareDrivers
+
+    if ($SomenteHardwareDrivers) {
+        Write-Title 'RESUMO CONCLUIDO'
+        if ($HardwareDriverSummaryFiles.PSObject.Properties.Name -contains 'Txt') {
+            Write-Ok "Resumo TXT:       $($HardwareDriverSummaryFiles.Txt)"
+        }
+        if ($HardwareDriverSummaryFiles.PSObject.Properties.Name -contains 'Markdown') {
+            Write-Ok "Resumo Markdown:  $($HardwareDriverSummaryFiles.Markdown)"
+        }
+        if ($HardwareDriverSummaryFiles.PSObject.Properties.Name -contains 'Json') {
+            Write-Ok "Resumo JSON:      $($HardwareDriverSummaryFiles.Json)"
+        }
+        Write-Info "Log:              $LogFile"
+        Stop-Transcript | Out-Null
+        exit 0
+    }
+}
 
 Write-Info 'Coletando sistema operacional...'
 $os  = Get-CimInstance Win32_OperatingSystem -ErrorAction SilentlyContinue
@@ -891,6 +1546,17 @@ Write-Title 'RELATORIO CONCLUIDO'
 Write-Ok  "HTML  : $HtmlFile"
 if (-not $NaoPDF -and (Test-Path $PdfFile)) {
     Write-Ok  "PDF   : $PdfFile"
+}
+if ($HardwareDriverSummaryFiles) {
+    if ($HardwareDriverSummaryFiles.PSObject.Properties.Name -contains 'Txt') {
+        Write-Ok "Resumo TXT:       $($HardwareDriverSummaryFiles.Txt)"
+    }
+    if ($HardwareDriverSummaryFiles.PSObject.Properties.Name -contains 'Markdown') {
+        Write-Ok "Resumo Markdown:  $($HardwareDriverSummaryFiles.Markdown)"
+    }
+    if ($HardwareDriverSummaryFiles.PSObject.Properties.Name -contains 'Json') {
+        Write-Ok "Resumo JSON:      $($HardwareDriverSummaryFiles.Json)"
+    }
 }
 Write-Info "Log   : $LogFile"
 Write-Host ''

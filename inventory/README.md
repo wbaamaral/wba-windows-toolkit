@@ -30,6 +30,7 @@ Scripts de inventário de hardware e software. Coletam informações detalhadas 
 **Saída gerada:**
 - **HTML** — relatório com design responsivo, índice de navegação e barras de uso de disco coloridas
 - **PDF** — conversão automática via Chrome ou Microsoft Edge em modo headless (quando disponível)
+- **Resumo de hardware e drivers** — saída enxuta opcional em TXT, Markdown e JSON
 
 **Parâmetros:**
 
@@ -37,6 +38,9 @@ Scripts de inventário de hardware e software. Coletam informações detalhadas 
 |---|---|---|
 | `-OutputDir` | `ReportsRoot` ou `C:\WBA\Relatorios` | Raiz de relatórios; o script cria `Inventory\<timestamp>` |
 | `-NaoPDF` | — | Gera apenas HTML, sem tentar converter para PDF |
+| `-GerarResumoHardwareDrivers` | — | Gera o inventário completo e também o resumo enxuto de hardware e drivers |
+| `-SomenteHardwareDrivers` | — | Gera apenas o resumo enxuto, sem HTML/PDF do inventário completo |
+| `-FormatoResumoHardwareDrivers` | `Todos` | `Txt`, `Markdown`, `Json` ou `Todos` |
 
 **Uso básico:**
 
@@ -49,7 +53,23 @@ Scripts de inventário de hardware e software. Coletam informações detalhadas 
 
 # Relatório em diretório personalizado (inclusive compartilhamento de rede)
 .\Inventario-Hardware-Software.ps1 -OutputDir "\\servidor\inventario$"
+
+# Inventário completo e resumo enxuto de hardware/drivers
+.\Inventario-Hardware-Software.ps1 -GerarResumoHardwareDrivers
+
+# Apenas resumo rápido para campo
+.\Inventario-Hardware-Software.ps1 -SomenteHardwareDrivers
+
+# Apenas Markdown para colar em chamado, issue ou relatório técnico
+.\Inventario-Hardware-Software.ps1 -SomenteHardwareDrivers -FormatoResumoHardwareDrivers Markdown
+
+# HTML completo sem PDF e resumo enxuto
+.\Inventario-Hardware-Software.ps1 -NaoPDF -GerarResumoHardwareDrivers
 ```
+
+**Resumo de hardware e drivers:** indicado para comparação antes/depois de atualização de driver, diagnóstico de tela preta, congelamento gráfico, falhas do DWM, falhas de vídeo e inventário rápido em campo.
+
+**Arquivos do resumo:** `resumo-hardware-drivers.txt`, `resumo-hardware-drivers.md` e/ou `resumo-hardware-drivers.json`.
 
 **Requisitos:** Administrador local recomendado (dados de hardware exigem privilégios elevados). Windows 10+. PowerShell 5.1+.
 
