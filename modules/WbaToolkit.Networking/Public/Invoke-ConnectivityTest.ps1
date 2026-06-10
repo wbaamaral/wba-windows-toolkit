@@ -74,14 +74,17 @@ function Invoke-ConnectivityTest {
     }
 
     $finishedAt = Get-Date
+    $resultItems = @($results)
+    $summary = Get-ConnectivitySummary -Results $resultItems
+
     $report = [pscustomobject]@{
         ReportId      = [guid]::NewGuid().ToString()
         StartedAt     = $startedAt
         FinishedAt    = $finishedAt
         Detailed      = [bool]$Detailed
         Context       = $context
-        Results       = @($results)
-        Summary       = Get-ConnectivitySummary -Results @($results)
+        Results       = $resultItems
+        Summary       = $summary
         Blocked       = $blocked
         BlockReason   = $reason
     }
