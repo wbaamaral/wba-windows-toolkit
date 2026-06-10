@@ -71,6 +71,10 @@ $PSDefaultParameterValues['Add-Content:Encoding'] = 'utf8'
 
 chcp 65001 | Out-Null
 
+$ToolkitRoot = Split-Path -Parent $PSScriptRoot
+$ToolkitModulePath = Join-Path $ToolkitRoot 'modules/WbaToolkit.Core/WbaToolkit.Core.psd1'
+Import-Module $ToolkitModulePath -Force -ErrorAction Stop
+
 $ScriptVersion = "v1.0"
 $ScriptName    = $MyInvocation.MyCommand.Name
 $LogDir        = "C:\ti"
@@ -142,12 +146,6 @@ function Show-BrazilTimeZones {
     Write-Host ""
 }
 
-function Test-Admin {
-    $id        = [Security.Principal.WindowsIdentity]::GetCurrent()
-    $principal = [Security.Principal.WindowsPrincipal]::new($id)
-    return $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
-}
-
 function Test-SupportedWindows {
     $os = Get-CimInstance Win32_OperatingSystem -ErrorAction SilentlyContinue
     if (-not $os) { return $false }
@@ -164,19 +162,6 @@ function Write-Step {
     Write-Progress -Activity "Configuracao pt-BR — $script:ScriptVersion" -Status $Message -PercentComplete $Percent
     Write-Host ""
     Write-Host "[$Percent%] $Message" -ForegroundColor Cyan
-}
-
-function Invoke-Safe {
-    param([string]$Description, [scriptblock]$Command)
-    try {
-        Write-Host "Executando: $Description" -ForegroundColor Green
-        & $Command
-    }
-    catch {
-        Write-Host "Falha em: $Description" -ForegroundColor Red
-        Write-Host $_.Exception.Message -ForegroundColor Red
-        Write-Warning "ERRO em '$Description': $($_.Exception.Message)"
-    }
 }
 
 # ---------------------------------------------------------------------------
@@ -392,7 +377,7 @@ if (-not ($BrazilTimeZones.Keys -contains $TimeZone)) {
 }
 
 # Elevacao administrativa
-if (-not (Test-Admin)) {
+if (-not (Test-IsAdministrator)) {
     $relaunchArgs = foreach ($kv in $PSBoundParameters.GetEnumerator()) {
         if ($kv.Value -is [switch]) {
             if ($kv.Value.IsPresent) { "-$($kv.Key)" }

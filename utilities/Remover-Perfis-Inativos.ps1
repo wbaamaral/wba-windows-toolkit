@@ -68,6 +68,10 @@ $PSDefaultParameterValues['Add-Content:Encoding'] = 'utf8'
 
 chcp 65001 | Out-Null
 
+$ToolkitRoot = Split-Path -Parent $PSScriptRoot
+$ToolkitModulePath = Join-Path $ToolkitRoot 'modules/WbaToolkit.Core/WbaToolkit.Core.psd1'
+Import-Module $ToolkitModulePath -Force -ErrorAction Stop
+
 $ScriptVersion = "v1.0"
 $ScriptName    = $MyInvocation.MyCommand.Name
 $LogDir        = "C:\ti"
@@ -104,20 +108,6 @@ function Show-Help {
     Write-Host "  .\$ScriptName -Silent -InactiveDays 180"
     Write-Host "  .\$ScriptName -ExcludeProfile `"svc.backup`",`"adm.temp`""
     Write-Host ""
-}
-
-function Test-Admin {
-    $id        = [Security.Principal.WindowsIdentity]::GetCurrent()
-    $principal = [Security.Principal.WindowsPrincipal]::new($id)
-    return $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
-}
-
-function Format-FileSize {
-    param([long]$Bytes)
-    if ($Bytes -ge 1GB) { return "{0:N1} GB" -f ($Bytes / 1GB) }
-    if ($Bytes -ge 1MB) { return "{0:N1} MB" -f ($Bytes / 1MB) }
-    if ($Bytes -ge 1KB) { return "{0:N1} KB" -f ($Bytes / 1KB) }
-    return "$Bytes B"
 }
 
 function Get-FolderSize {
@@ -519,7 +509,7 @@ function Invoke-InteractiveMenu {
 if ($Help)    { Show-Help; exit 0 }
 if ($Version) { Write-Host "Versao: $ScriptVersion" -ForegroundColor Green; exit 0 }
 
-if (-not (Test-Admin)) {
+if (-not (Test-IsAdministrator)) {
     $relaunchArgs = foreach ($kv in $PSBoundParameters.GetEnumerator()) {
         if ($kv.Value -is [switch]) {
             if ($kv.Value.IsPresent) { "-$($kv.Key)" }

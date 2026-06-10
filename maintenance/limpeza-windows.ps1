@@ -141,6 +141,10 @@ $PSDefaultParameterValues['Add-Content:Encoding'] = 'utf8'
 
 chcp 65001 | Out-Null
 
+$ToolkitRoot = Split-Path -Parent $PSScriptRoot
+$ToolkitModulePath = Join-Path $ToolkitRoot 'modules/WbaToolkit.Core/WbaToolkit.Core.psd1'
+Import-Module $ToolkitModulePath -Force -ErrorAction Stop
+
 $ScriptVersion = "v1.0"
 $ScriptName    = $MyInvocation.MyCommand.Name
 $LogDir = "C:\ti"
@@ -192,12 +196,6 @@ function Show-Help {
     Write-Host ""
 }
 
-function Test-Admin {
-    $Identity = [Security.Principal.WindowsIdentity]::GetCurrent()
-    $Principal = [Security.Principal.WindowsPrincipal]::new($Identity)
-    return $Principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
-}
-
 function Write-Step {
     param (
         [string]$Message,
@@ -207,23 +205,6 @@ function Write-Step {
     Write-Progress -Activity "Limpeza e manutenção segura do Windows" -Status $Message -PercentComplete $Percent
     Write-Host ""
     Write-Host "[$Percent%] $Message" -ForegroundColor Cyan
-}
-
-function Invoke-Safe {
-    param (
-        [string]$Description,
-        [scriptblock]$Command
-    )
-
-    try {
-        Write-Host "Executando: $Description" -ForegroundColor Green
-        & $Command
-    }
-    catch {
-        Write-Host "Falha em: $Description" -ForegroundColor Red
-        Write-Host $_.Exception.Message -ForegroundColor Red
-        Write-Warning "ERRO em '$Description': $($_.Exception.Message)"
-    }
 }
 
 function Remove-SafePath {
@@ -451,7 +432,7 @@ if ($Version) {
     exit 0
 }
 
-if (-not (Test-Admin)) {
+if (-not (Test-IsAdministrator)) {
     $relaunchArgs = foreach ($kv in $PSBoundParameters.GetEnumerator()) {
         if ($kv.Value -is [switch]) {
             if ($kv.Value.IsPresent) { "-$($kv.Key)" }

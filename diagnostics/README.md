@@ -8,7 +8,8 @@ Scripts de diagnóstico de conectividade e saúde do ambiente de rede. Executam 
 
 ### `Testar-conectividade-internet.ps1`
 
-**Função:** Diagnóstico completo e sequencial de conectividade com a internet em quatro camadas.
+**Função:** Invólucro operacional do módulo `WbaToolkit.Networking` para diagnóstico completo e sequencial de
+conectividade com a internet.
 
 **Principais ações:**
 
@@ -16,9 +17,9 @@ As etapas são executadas em sequência obrigatória — uma etapa bloqueada imp
 
 | Etapa | Camada | O que verifica |
 |---|---|---|
-| 1 | Rede local | Adaptadores ativos, endereço IP, gateway padrão configurado, servidores DNS configurados |
+| 1 | Rede local | Adaptador ativo, endereço IP, gateway padrão configurado e servidores DNS configurados |
 | 2 | IP direto | Ping para `8.8.8.8`, `8.8.4.4`, `1.1.1.1` e `9.9.9.9` sem depender de DNS |
-| 3 | DNS | Resolução de nomes para `google.com`, `microsoft.com`, `cloudflare.com` e `conectividade.microsoft.com`; coleta latência de resolução |
+| 3 | DNS | Resolução de nomes para `google.com`, `microsoft.com`, `cloudflare.com` e `conectividade.microsoft.com` |
 | 4 | Domínios | Ping e teste de porta TCP 443 para hosts públicos validando conectividade de ponta a ponta |
 
 **Parâmetros:**
@@ -37,6 +38,6 @@ As etapas são executadas em sequência obrigatória — uma etapa bloqueada imp
 .\Testar-conectividade-internet.ps1 -Detalhado
 ```
 
-**Saída:** Relatório em tela com status por teste (`OK` / `FALHA` / `AVISO`), resumo final e etapa onde a falha foi isolada (quando aplicável).
+**Saída:** Relatório em tela com status por teste, resumo final e bloqueio quando a rede local impede a continuação.
 
 **Requisitos:** Não requer administrador. Windows 10+. PowerShell 5.1+.

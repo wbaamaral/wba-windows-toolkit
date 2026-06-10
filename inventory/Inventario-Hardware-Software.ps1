@@ -110,42 +110,20 @@ $PSDefaultParameterValues['Set-Content:Encoding'] = 'utf8'
 $PSDefaultParameterValues['Add-Content:Encoding'] = 'utf8'
 chcp 65001 | Out-Null
 
+$ToolkitRoot = Split-Path -Parent $PSScriptRoot
+$ToolkitModulePath = Join-Path $ToolkitRoot 'modules/WbaToolkit.Core/WbaToolkit.Core.psd1'
+Import-Module $ToolkitModulePath -Force -ErrorAction Stop
+
 # ---------------------------------------------------------------------------
 # Helpers visuais
 # ---------------------------------------------------------------------------
-function Write-Ok    { param([string]$m) Write-Host "[OK]    $m" -ForegroundColor Green }
-function Write-Fail  { param([string]$m) Write-Host "[FALHA] $m" -ForegroundColor Red }
-function Write-Warn  { param([string]$m) Write-Host "[AVISO] $m" -ForegroundColor Yellow }
-function Write-Info  { param([string]$m) Write-Host "[INFO]  $m" -ForegroundColor White }
-function Write-Title {
-    param([string]$m)
-    Write-Host ''
-    Write-Host ('=' * 80) -ForegroundColor Cyan
-    Write-Host $m -ForegroundColor Cyan
-    Write-Host ('=' * 80) -ForegroundColor Cyan
-}
-
 # ---------------------------------------------------------------------------
 # Helpers de formatacao e HTML
 # ---------------------------------------------------------------------------
-function Format-Bytes {
-    param([long]$Bytes)
-    if ($Bytes -ge 1TB) { return "$([math]::Round($Bytes / 1TB, 2)) TB" }
-    if ($Bytes -ge 1GB) { return "$([math]::Round($Bytes / 1GB, 2)) GB" }
-    if ($Bytes -ge 1MB) { return "$([math]::Round($Bytes / 1MB, 2)) MB" }
-    return "$([math]::Round($Bytes / 1KB, 2)) KB"
-}
-
-function Safe {
-    param($Value, [string]$Default = '<span class="muted">&mdash;</span>')
-    if ($null -eq $Value -or [string]::IsNullOrWhiteSpace("$Value")) { return $Default }
-    return ([string]$Value) -replace '&','&amp;' -replace '<','&lt;' -replace '>','&gt;'
-}
-
 function Format-RegDate {
     param([string]$d)
     if ($d -match '^(\d{4})(\d{2})(\d{2})$') { return "$($Matches[3])/$($Matches[2])/$($Matches[1])" }
-    return Safe $d
+    return ConvertTo-HtmlSafe $d
 }
 
 function Get-BarClass {
@@ -410,8 +388,8 @@ footer { text-align: center; color: var(--muted);
 '@
 
 # --- Header + nav ----------------------------------------------------------
-$manufacturerModel = "$(Safe $cs.Manufacturer) $(Safe $cs.Model)"
-$domainInfo = if ($cs.PartOfDomain) { "Dominio: $(Safe $cs.Domain)" } else { "Grupo de trabalho: $(Safe $cs.Workgroup)" }
+$manufacturerModel = "$(ConvertTo-HtmlSafe $cs.Manufacturer) $(ConvertTo-HtmlSafe $cs.Model)"
+$domainInfo = if ($cs.PartOfDomain) { "Dominio: $(ConvertTo-HtmlSafe $cs.Domain)" } else { "Grupo de trabalho: $(ConvertTo-HtmlSafe $cs.Workgroup)" }
 
 $htmlTop = @"
 <!DOCTYPE html>
@@ -432,7 +410,7 @@ $css
     <div><strong>$env:COMPUTERNAME</strong></div>
     <div>$domainInfo</div>
     <div>Gerado em: $DataHora</div>
-    <div>Usuario: $(Safe $env:USERNAME)</div>
+    <div>Usuario: $(ConvertTo-HtmlSafe $env:USERNAME)</div>
   </div>
 </header>
 <nav>
@@ -452,13 +430,13 @@ $css
 "@
 
 # --- Cards de resumo -------------------------------------------------------
-$cpuCard   = if ($cpu1) { Safe $cpu1.Name } else { '&mdash;' }
-$cpuSub    = if ($cpu1) { "$(Safe $cpu1.NumberOfCores) nucleos / $(Safe $cpu1.NumberOfLogicalProcessors) threads" } else { '' }
-$osCard    = if ($os) { Safe ($os.Caption -replace 'Microsoft ', '') } else { '&mdash;' }
-$osSub     = if ($os) { "Build $(Safe $os.BuildNumber)" } else { '' }
+$cpuCard   = if ($cpu1) { ConvertTo-HtmlSafe $cpu1.Name } else { '&mdash;' }
+$cpuSub    = if ($cpu1) { "$(ConvertTo-HtmlSafe $cpu1.NumberOfCores) nucleos / $(ConvertTo-HtmlSafe $cpu1.NumberOfLogicalProcessors) threads" } else { '' }
+$osCard    = if ($os) { ConvertTo-HtmlSafe ($os.Caption -replace 'Microsoft ', '') } else { '&mdash;' }
+$osSub     = if ($os) { "Build $(ConvertTo-HtmlSafe $os.BuildNumber)" } else { '' }
 $ramCard   = "${totalRamGB} GB"
 $ramSub    = "$($ramMods.Count) modulo(s)"
-$diskCard  = if ($logDisk.Count -gt 0) { Format-Bytes ($logDisk | Measure-Object -Property Size -Sum).Sum } else { '&mdash;' }
+$diskCard  = if ($logDisk.Count -gt 0) { Format-FileSize ($logDisk | Measure-Object -Property Size -Sum).Sum } else { '&mdash;' }
 $bootCard  = if ($os) { $os.LastBootUpTime.ToString('dd/MM/yyyy HH:mm') } else { '&mdash;' }
 
 $htmlCards = @"
@@ -467,7 +445,7 @@ $htmlCards = @"
     <div class="card-icon">&#128187;</div>
     <div class="card-label">Computador</div>
     <div class="card-value">$env:COMPUTERNAME</div>
-    <div class="card-sub">$(Safe $cs.Model)</div>
+    <div class="card-sub">$(ConvertTo-HtmlSafe $cs.Model)</div>
   </div>
   <div class="card">
     <div class="card-icon">&#128196;</div>
@@ -515,8 +493,8 @@ $htmlCards = @"
 "@
 
 # --- Sistema Operacional ---------------------------------------------------
-$archStr    = Safe $os.OSArchitecture
-$serialOS   = Safe $os.SerialNumber
+$archStr    = ConvertTo-HtmlSafe $os.OSArchitecture
+$serialOS   = ConvertTo-HtmlSafe $os.SerialNumber
 $installDt  = if ($os) { $os.InstallDate.ToString('dd/MM/yyyy') } else { '&mdash;' }
 $freeMemGB  = if ($os) { [math]::Round($os.FreePhysicalMemory / 1MB, 2) } else { 0 }
 $usedMemGB  = [math]::Round($totalRamGB - $freeMemGB, 2)
@@ -527,17 +505,17 @@ $htmlSO = @"
   <div class="section-body">
     <div class="kv-grid">
       <table class="kv-table">
-        $(New-KvRow 'Nome' (Safe $os.Caption))
-        $(New-KvRow 'Versao' (Safe $os.Version))
-        $(New-KvRow 'Build' (Safe $os.BuildNumber))
+        $(New-KvRow 'Nome' (ConvertTo-HtmlSafe $os.Caption))
+        $(New-KvRow 'Versao' (ConvertTo-HtmlSafe $os.Version))
+        $(New-KvRow 'Build' (ConvertTo-HtmlSafe $os.BuildNumber))
         $(New-KvRow 'Arquitetura' $archStr)
-        $(New-KvRow 'Idioma' (Safe $os.MUILanguages))
+        $(New-KvRow 'Idioma' (ConvertTo-HtmlSafe $os.MUILanguages))
         $(New-KvRow 'Instalado em' $installDt)
       </table>
       <table class="kv-table">
         $(New-KvRow 'Ultimo boot' $(if ($os) { $os.LastBootUpTime.ToString('dd/MM/yyyy HH:mm:ss') } else { '&mdash;' }))
         $(New-KvRow 'Uptime' $uptimeStr)
-        $(New-KvRow 'Diretorio Windows' (Safe $os.WindowsDirectory))
+        $(New-KvRow 'Diretorio Windows' (ConvertTo-HtmlSafe $os.WindowsDirectory))
         $(New-KvRow 'Total RAM (OS)' "$totalRamGB GB")
         $(New-KvRow 'RAM em uso' "$usedMemGB GB / $totalRamGB GB")
         $(New-KvRow 'Nr. de serie OS' $serialOS)
@@ -553,12 +531,12 @@ $cpuRows = ($cpus | ForEach-Object {
     $l2  = if ($_.L2CacheSize)  { "$($_.L2CacheSize) KB"  } else { '&mdash;' }
     $l3  = if ($_.L3CacheSize)  { "$($_.L3CacheSize) KB"  } else { '&mdash;' }
     @"
-    <div class="sub">$(Safe $_.Name)</div>
+    <div class="sub">$(ConvertTo-HtmlSafe $_.Name)</div>
     <table class="kv-table">
-      $(New-KvRow 'Fabricante'           (Safe $_.Manufacturer))
-      $(New-KvRow 'Socket'               (Safe $_.SocketDesignation))
-      $(New-KvRow 'Nucleos fisicos'      (Safe $_.NumberOfCores))
-      $(New-KvRow 'Processadores logicos'(Safe $_.NumberOfLogicalProcessors))
+      $(New-KvRow 'Fabricante'           (ConvertTo-HtmlSafe $_.Manufacturer))
+      $(New-KvRow 'Socket'               (ConvertTo-HtmlSafe $_.SocketDesignation))
+      $(New-KvRow 'Nucleos fisicos'      (ConvertTo-HtmlSafe $_.NumberOfCores))
+      $(New-KvRow 'Processadores logicos'(ConvertTo-HtmlSafe $_.NumberOfLogicalProcessors))
       $(New-KvRow 'Velocidade maxima'    "$speedGHz GHz")
       $(New-KvRow 'Cache L2'             $l2)
       $(New-KvRow 'Cache L3'             $l3)
@@ -577,8 +555,8 @@ $htmlCPU = @"
 $ramTypeMap = @{ 0='Desconhecido'; 20='DDR'; 21='DDR2'; 22='DDR2 FB-DIMM'; 24='DDR3'; 26='DDR4'; 34='DDR5' }
 $ramRows = ($ramMods | ForEach-Object {
     $tipo = if ($ramTypeMap.ContainsKey([int]$_.SMBIOSMemoryType)) { $ramTypeMap[[int]$_.SMBIOSMemoryType] } else { "Tipo $($_.SMBIOSMemoryType)" }
-    $cap  = if ($_.Capacity) { Format-Bytes ([long]$_.Capacity) } else { '&mdash;' }
-    "<tr><td class='mono'>$(Safe $_.DeviceLocator)</td><td>$(Safe $_.Manufacturer)</td><td><strong>$cap</strong></td><td>$(Safe $_.Speed) MHz</td><td><span class='badge badge-blue'>$tipo</span></td><td class='mono'>$(Safe $_.PartNumber)</td></tr>"
+    $cap  = if ($_.Capacity) { Format-FileSize ([long]$_.Capacity) } else { '&mdash;' }
+    "<tr><td class='mono'>$(ConvertTo-HtmlSafe $_.DeviceLocator)</td><td>$(ConvertTo-HtmlSafe $_.Manufacturer)</td><td><strong>$cap</strong></td><td>$(ConvertTo-HtmlSafe $_.Speed) MHz</td><td><span class='badge badge-blue'>$tipo</span></td><td class='mono'>$(ConvertTo-HtmlSafe $_.PartNumber)</td></tr>"
 }) -join ''
 
 $htmlRAM = @"
@@ -606,19 +584,19 @@ $htmlMB = @"
       <div>
         <div class="sub">Placa-mae</div>
         <table class="kv-table">
-          $(New-KvRow 'Fabricante'    (Safe $mb.Manufacturer))
-          $(New-KvRow 'Produto'       (Safe $mb.Product))
-          $(New-KvRow 'Versao'        (Safe $mb.Version))
-          $(New-KvRow 'Nr. de serie'  (Safe $mb.SerialNumber))
+          $(New-KvRow 'Fabricante'    (ConvertTo-HtmlSafe $mb.Manufacturer))
+          $(New-KvRow 'Produto'       (ConvertTo-HtmlSafe $mb.Product))
+          $(New-KvRow 'Versao'        (ConvertTo-HtmlSafe $mb.Version))
+          $(New-KvRow 'Nr. de serie'  (ConvertTo-HtmlSafe $mb.SerialNumber))
         </table>
       </div>
       <div>
         <div class="sub">BIOS</div>
         <table class="kv-table">
-          $(New-KvRow 'Fabricante'     (Safe $bios.Manufacturer))
-          $(New-KvRow 'Versao'         (Safe $bios.SMBIOSBIOSVersion))
+          $(New-KvRow 'Fabricante'     (ConvertTo-HtmlSafe $bios.Manufacturer))
+          $(New-KvRow 'Versao'         (ConvertTo-HtmlSafe $bios.SMBIOSBIOSVersion))
           $(New-KvRow 'Data de lancamento' $biosDate)
-          $(New-KvRow 'Nr. de serie'   (Safe $bios.SerialNumber))
+          $(New-KvRow 'Nr. de serie'   (ConvertTo-HtmlSafe $bios.SerialNumber))
         </table>
       </div>
     </div>
@@ -628,8 +606,8 @@ $htmlMB = @"
 
 # --- Armazenamento ---------------------------------------------------------
 $phyRows = ($phyDisk | ForEach-Object {
-    $sz = if ($_.Size) { Format-Bytes ([long]$_.Size) } else { '&mdash;' }
-    "<tr><td>$(Safe $_.Model)</td><td><span class='badge badge-blue'>$(Safe $_.InterfaceType)</span></td><td class='nowrap'><strong>$sz</strong></td><td>$(Safe $_.Partitions)</td><td class='mono'>$(Safe $_.SerialNumber)</td></tr>"
+    $sz = if ($_.Size) { Format-FileSize ([long]$_.Size) } else { '&mdash;' }
+    "<tr><td>$(ConvertTo-HtmlSafe $_.Model)</td><td><span class='badge badge-blue'>$(ConvertTo-HtmlSafe $_.InterfaceType)</span></td><td class='nowrap'><strong>$sz</strong></td><td>$(ConvertTo-HtmlSafe $_.Partitions)</td><td class='mono'>$(ConvertTo-HtmlSafe $_.SerialNumber)</td></tr>"
 }) -join ''
 
 $logRows = ($logDisk | ForEach-Object {
@@ -642,10 +620,10 @@ $logRows = ($logDisk | ForEach-Object {
     @"
 <tr>
   <td><strong>$($_.DeviceID)</strong></td>
-  <td>$(Safe $_.VolumeName)</td>
-  <td>$(Safe $_.FileSystem)</td>
-  <td class='nowrap'>$(Format-Bytes $total)</td>
-  <td class='nowrap'>$(Format-Bytes $free)</td>
+  <td>$(ConvertTo-HtmlSafe $_.VolumeName)</td>
+  <td>$(ConvertTo-HtmlSafe $_.FileSystem)</td>
+  <td class='nowrap'>$(Format-FileSize $total)</td>
+  <td class='nowrap'>$(Format-FileSize $free)</td>
   <td>
     <div style="display:flex;align-items:center;gap:.5rem;">
       <div class="disk-bar" style="width:100px"><div class="disk-fill $barClass" style="width:${pct}%"></div></div>
@@ -680,15 +658,15 @@ $htmlStorage = @"
 
 # --- GPU -------------------------------------------------------------------
 $gpuRows = ($gpus | ForEach-Object {
-    $vram = if ($_.AdapterRAM -and [long]$_.AdapterRAM -gt 0) { Format-Bytes ([long]$_.AdapterRAM) } else { '&mdash;' }
+    $vram = if ($_.AdapterRAM -and [long]$_.AdapterRAM -gt 0) { Format-FileSize ([long]$_.AdapterRAM) } else { '&mdash;' }
     $res  = if ($_.CurrentHorizontalResolution) { "$($_.CurrentHorizontalResolution) x $($_.CurrentVerticalResolution)" } else { '&mdash;' }
     @"
-    <div class="sub">$(Safe $_.Name)</div>
+    <div class="sub">$(ConvertTo-HtmlSafe $_.Name)</div>
     <table class="kv-table">
       $(New-KvRow 'VRAM'             $vram)
       $(New-KvRow 'Resolucao atual'  $res)
-      $(New-KvRow 'Driver'           (Safe $_.DriverVersion))
-      $(New-KvRow 'Status'           (Safe $_.Status))
+      $(New-KvRow 'Driver'           (ConvertTo-HtmlSafe $_.DriverVersion))
+      $(New-KvRow 'Status'           (ConvertTo-HtmlSafe $_.Status))
     </table>
 "@
 }) -join ''
@@ -708,9 +686,9 @@ $netRows = ($nets | ForEach-Object {
     $dns   = if ($_.DNSServerSearchOrder){ $_.DNSServerSearchOrder -join ', ' } else { '&mdash;' }
     $dhcp  = if ($_.DHCPEnabled) { "<span class='badge badge-green'>Sim</span>" } else { "<span class='badge badge-gray'>Nao</span>" }
     @"
-    <div class="sub">$(Safe $_.Description)</div>
+    <div class="sub">$(ConvertTo-HtmlSafe $_.Description)</div>
     <table class="kv-table">
-      $(New-KvRow 'MAC'          "<span class='mono'>$(Safe $_.MACAddress)</span>")
+      $(New-KvRow 'MAC'          "<span class='mono'>$(ConvertTo-HtmlSafe $_.MACAddress)</span>")
       $(New-KvRow 'IP(s)'        "<span class='mono'>$ips</span>")
       $(New-KvRow 'Mascara(s)'   "<span class='mono'>$masks</span>")
       $(New-KvRow 'Gateway'      "<span class='mono'>$gws</span>")
@@ -730,7 +708,7 @@ $htmlNet = @"
 # --- Monitores -------------------------------------------------------------
 if ($mons.Count -gt 0) {
     $monRows = ($mons | ForEach-Object {
-        "<tr><td>$(Safe $_.FriendlyName)</td><td><span class='badge badge-blue'>$(Safe $_.Class)</span></td><td class='mono'>$(Safe $_.InstanceId)</td></tr>"
+        "<tr><td>$(ConvertTo-HtmlSafe $_.FriendlyName)</td><td><span class='badge badge-blue'>$(ConvertTo-HtmlSafe $_.Class)</span></td><td class='mono'>$(ConvertTo-HtmlSafe $_.InstanceId)</td></tr>"
     }) -join ''
     $monBody = @"
     <div class="scroll-wrap">
@@ -754,7 +732,7 @@ $htmlMonitors = @"
 # --- Software instalado ----------------------------------------------------
 $swRows = ($software | ForEach-Object {
     $dt = Format-RegDate $_.InstallDate
-    "<tr><td>$(Safe $_.DisplayName)</td><td>$(Safe $_.DisplayVersion)</td><td>$(Safe $_.Publisher)</td><td class='nowrap'>$dt</td></tr>"
+    "<tr><td>$(ConvertTo-HtmlSafe $_.DisplayName)</td><td>$(ConvertTo-HtmlSafe $_.DisplayVersion)</td><td>$(ConvertTo-HtmlSafe $_.Publisher)</td><td class='nowrap'>$dt</td></tr>"
 }) -join ''
 
 $htmlSoftware = @"
@@ -778,7 +756,7 @@ $htmlSoftware = @"
 # --- Hotfixes --------------------------------------------------------------
 $hfRows = ($hotfixes | ForEach-Object {
     $dt = if ($_.InstalledOn) { $_.InstalledOn.ToString('dd/MM/yyyy') } else { '&mdash;' }
-    "<tr><td><span class='badge badge-blue mono'>$(Safe $_.HotFixID)</span></td><td>$(Safe $_.Description)</td><td>$(Safe $_.InstalledBy)</td><td class='nowrap'>$dt</td></tr>"
+    "<tr><td><span class='badge badge-blue mono'>$(ConvertTo-HtmlSafe $_.HotFixID)</span></td><td>$(ConvertTo-HtmlSafe $_.Description)</td><td>$(ConvertTo-HtmlSafe $_.InstalledBy)</td><td class='nowrap'>$dt</td></tr>"
 }) -join ''
 
 $htmlHotfixes = @"
@@ -797,8 +775,8 @@ $htmlHotfixes = @"
 
 # --- Servicos em execucao --------------------------------------------------
 $svcRows = ($services | ForEach-Object {
-    $startType = Safe $_.StartType
-    "<tr><td class='mono'>$(Safe $_.Name)</td><td>$(Safe $_.DisplayName)</td><td><span class='badge badge-green'>Running</span></td><td><span class='badge badge-gray'>$startType</span></td></tr>"
+    $startType = ConvertTo-HtmlSafe $_.StartType
+    "<tr><td class='mono'>$(ConvertTo-HtmlSafe $_.Name)</td><td>$(ConvertTo-HtmlSafe $_.DisplayName)</td><td><span class='badge badge-green'>Running</span></td><td><span class='badge badge-gray'>$startType</span></td></tr>"
 }) -join ''
 
 $htmlServices = @"
