@@ -17,7 +17,7 @@ o script não aplica correções permanentes; ações de reparo ficam reservadas
 
 | Etapa | Ação |
 |---|---|
-| Sistema | Coleta versão do Windows, equipamento, memória, uptime e plano de energia |
+| Sistema | Coleta versão do Windows, equipamento, memória, uptime, tempo do último boot e plano de energia |
 | Disco | Mede uso do disco, fila média e latência por contadores quando disponíveis |
 | Processos | Lista processos com maior I/O acumulado |
 | Saúde | Consulta `Get-PhysicalDisk`, `Get-Disk`, `Win32_DiskDrive` e SMART quando disponível |
@@ -25,8 +25,13 @@ o script não aplica correções permanentes; ações de reparo ficam reservadas
 | CHKDSK | Executa `chkdsk <unidade> /scan` no modo diagnóstico |
 | DISM | Executa `CheckHealth` e `ScanHealth` no modo diagnóstico |
 | SFC | Executa `sfc /scannow` apenas no modo assistido |
+| Inicialização | Lista Registro `Run/RunOnce`, pastas Inicializar e tarefas agendadas de logon/boot com estado ON/OFF |
 | Aplicativos | Detecta indícios de plugins bancários, antivírus, OneDrive, navegadores e Adobe Reader |
 | Relatórios | Gera TXT e JSON; HTML opcional |
+
+No modo `Assistido`, o bloco de inicialização permite desabilitar uma entrada para diagnóstico, habilitar novamente
+entradas desabilitadas pelo HD100 ou remover definitivamente uma entrada da lista de inicialização com confirmação
+textual. O modo `Rollback` reativa entradas de inicialização que foram desabilitadas pelo próprio HD100.
 
 **Parâmetros:**
 
@@ -54,6 +59,9 @@ o script não aplica correções permanentes; ações de reparo ficam reservadas
 
 # Modo assistido
 .\Diagnostico-Reparo-HD100.ps1 -Modo Assistido -GerarHtml
+
+# Reativar entradas de inicialização desabilitadas pelo HD100
+.\Diagnostico-Reparo-HD100.ps1 -Modo Rollback
 
 # Regerar relatório da execução mais recente
 .\Diagnostico-Reparo-HD100.ps1 -Modo Relatorio -GerarHtml
