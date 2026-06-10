@@ -41,3 +41,22 @@ As etapas são executadas em sequência obrigatória — uma etapa bloqueada imp
 **Saída:** Relatório em tela com status por teste, resumo final e bloqueio quando a rede local impede a continuação.
 
 **Requisitos:** Não requer administrador. Windows 10+. PowerShell 5.1+.
+
+### Teste direcionado por alvo, protocolo e portas
+
+O módulo `WbaToolkit.Networking` também permite testar um destino específico com protocolo e portas definidos pelo operador.
+
+```powershell
+Import-Module .\modules\WbaToolkit.Networking\WbaToolkit.Networking.psd1 -Force
+
+# Wizard interativo
+Invoke-TargetConnectivityWizard
+
+# TCP em portas específicas
+$report = Invoke-TargetConnectivityTest -TargetAddress 192.168.5.10 -Protocol TCP -PortSpec '80,443,3389'
+Show-ConnectivityReport -Report $report
+
+# TCP, UDP e ICMP no mesmo alvo
+$report = Invoke-TargetConnectivityTest -TargetAddress 192.168.5.10 -Protocol All -PortSpec '53,80,443,8000-8010'
+Show-ConnectivityReport -Report $report
+```

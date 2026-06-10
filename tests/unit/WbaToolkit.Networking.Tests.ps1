@@ -25,6 +25,14 @@ Describe 'WbaToolkit.Networking' {
         It 'Deve exportar Export-ConnectivityReport' {
             (Get-Command Export-ConnectivityReport -ErrorAction Stop).CommandType | Should -Be 'Function'
         }
+
+        It 'Deve exportar Invoke-TargetConnectivityTest' {
+            (Get-Command Invoke-TargetConnectivityTest -ErrorAction Stop).CommandType | Should -Be 'Function'
+        }
+
+        It 'Deve exportar Invoke-TargetConnectivityWizard' {
+            (Get-Command Invoke-TargetConnectivityWizard -ErrorAction Stop).CommandType | Should -Be 'Function'
+        }
     }
 
     Context 'Contrato dos testes' {
@@ -43,6 +51,18 @@ Describe 'WbaToolkit.Networking' {
             $result = Test-UdpPortConnectivity -TargetAddress '127.0.0.1' -Port 1 -TimeoutSeconds 1
             $result | Should -BeOfType [psobject]
             $result.PSObject.Properties.Name | Should -Contain 'Classification'
+        }
+
+        It 'Invoke-TargetConnectivityTest deve testar TCP com lista de portas' {
+            $report = Invoke-TargetConnectivityTest -TargetAddress '127.0.0.1' -Protocol TCP -PortSpec '1,2' -TimeoutSeconds 1
+            $report.ReportType | Should -Be 'TargetConnectivity'
+            @($report.Results).Count | Should -Be 2
+            $report.Ports | Should -Be @(1, 2)
+        }
+
+        It 'Invoke-TargetConnectivityTest deve rejeitar porta invalida' {
+            { Invoke-TargetConnectivityTest -TargetAddress '127.0.0.1' -Protocol TCP -PortSpec '0,70000' } |
+                Should -Throw
         }
     }
 
