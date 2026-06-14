@@ -4,6 +4,13 @@
 
 
 
+## [v1.1.0] — 2026-06-14
+
+### Adicionado
+- `Export-ToolkitDocumentation` — comando unificado de portal HTML (ADR 0013); gera `index.html`, `operador.html` e referência técnica via `Export-ToolkitFunctionDocs`; suporta `-Mode All|Portal|TechnicalReference` e `-IncludeChangelog`
+- `ConvertFrom-MarkdownSimple` (privada) — conversor Markdown→HTML em PS 5.1 puro (máquina de estados: headings, tabelas, listas, fenced code)
+- `New-PortalIndexHtml` (privada) — gerador de portal index.html com cards de ação e catálogo convertido de `docs/manual/README.md`
+
 ## [v1.0.1] — 2026-06-14
 
 ### Adicionado

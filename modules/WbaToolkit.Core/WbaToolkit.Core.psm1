@@ -32,5 +32,6 @@ Export-ModuleMember -Function @(
     'Set-ToolkitReportsRoot',
     'Get-ToolkitReportsRoot',
     'Initialize-ToolkitReportSession',
-    'Export-ToolkitFunctionDocs'
+    'Export-ToolkitFunctionDocs',
+    'Export-ToolkitDocumentation'
 )
