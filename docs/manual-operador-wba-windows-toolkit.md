@@ -2,7 +2,7 @@
 title: "Manual do Operador - WBA Windows Toolkit"
 author: "WBA Windows Toolkit"
 lang: "pt-BR"
-date: "2026-06-10"
+date: "2026-06-14"
 ---
 
 # Manual do Operador - WBA Windows Toolkit
@@ -65,6 +65,7 @@ Exemplos de módulos do projeto:
 |---|---|---|
 | `WbaToolkit.Core` | `modules\WbaToolkit.Core\WbaToolkit.Core.psd1` | Funções comuns: mensagens, segurança, formatação, manual HTML |
 | `WbaToolkit.Networking` | `modules\WbaToolkit.Networking\WbaToolkit.Networking.psd1` | Testes de rede, relatórios de conectividade |
+| `WbaToolkit.Startup` | `modules\WbaToolkit.Startup\WbaToolkit.Startup.psd1` | Gerenciamento de itens de inicialização e serviços do Windows |
 
 ### 1.4. Quando usar PowerShell como Administrador
 
@@ -137,7 +138,13 @@ Import-Module .\modules\WbaToolkit.Core\WbaToolkit.Core.psd1 -Force
 Import-Module .\modules\WbaToolkit.Networking\WbaToolkit.Networking.psd1 -Force
 ```
 
-### 3.3. Ver quais comandos um módulo carregou
+### 3.3. Importar o módulo de inicialização
+
+```powershell
+Import-Module .\modules\WbaToolkit.Startup\WbaToolkit.Startup.psd1 -Force
+```
+
+### 3.4. Ver quais comandos um módulo carregou
 
 Para o módulo principal:
 
@@ -151,7 +158,13 @@ Para o módulo de rede:
 Get-Command -Module WbaToolkit.Networking
 ```
 
-### 3.4. Pedir ajuda de uma função
+Para o módulo de inicialização:
+
+```powershell
+Get-Command -Module WbaToolkit.Startup
+```
+
+### 3.5. Pedir ajuda de uma função
 
 Exemplo:
 
@@ -191,6 +204,12 @@ módulo, essas funções podem ser chamadas diretamente no PowerShell.
 | `Get-ToolkitReportsRoot` | Resolve a raiz de relatórios a ser usada |
 | `Initialize-ToolkitReportSession` | Cria uma sessão padronizada de relatório |
 | `Export-ToolkitFunctionDocs` | Gera manual HTML local dos módulos e scripts |
+| `Read-UserInput` | Solicita entrada do operador com suporte a valor padrão |
+| `Get-Utf8BomEncoding` | Retorna encoding UTF-8 com BOM para gravação de arquivos |
+| `Write-TextFileUtf8` | Grava ou acrescenta texto em arquivo UTF-8 com BOM |
+| `Write-ScriptLog` | Registra mensagem de log com timestamp e nível de severidade |
+| `Initialize-ScriptSession` | Cria sessão padronizada de script com caminhos resolvidos |
+| `Get-CimInstanceSafe` | Consulta instâncias CIM com tratamento de erro seguro |
 
 ### 4.2. Funções do módulo `WbaToolkit.Networking`
 
@@ -213,7 +232,19 @@ módulo, essas funções podem ser chamadas diretamente no PowerShell.
 | `Export-ConnectivityReport` | Gera relatório HTML |
 | `Export-ConnectivityReportPdf` | Gera PDF quando suporte estiver disponível |
 
-### 4.3. Exemplo simples de uso de função do módulo
+### 4.3. Funções do módulo `WbaToolkit.Startup`
+
+| Função | Para que serve |
+|---|---|
+| `Get-StartupItem` | Retorna todos os itens de inicialização (Registro, pasta Startup, tarefas agendadas) |
+| `Show-StartupItem` | Exibe a lista de itens de inicialização no console com estado ON/OFF |
+| `Disable-StartupItem` | Desabilita um ou mais itens, preservando dados para reativação |
+| `Enable-StartupItem` | Reativa itens previamente desabilitados pelo toolkit |
+| `Remove-StartupItem` | Remove definitivamente um item da inicialização (com confirmação textual) |
+| `Invoke-StartupManager` | Gerenciador interativo para seleção e modificação de entradas |
+| `Get-ServiceStartupState` | Retorna o estado e tipo de inicialização de serviços do Windows |
+
+### 4.4. Exemplo simples de uso de função do módulo
 
 ```powershell
 Import-Module .\modules\WbaToolkit.Networking\WbaToolkit.Networking.psd1 -Force
@@ -686,14 +717,136 @@ Arquivos principais:
 | `logs\System.evtx` | Exportação opcional do log System |
 | `logs\Application.evtx` | Exportação opcional do log Application |
 
-## 10. Script `Testar-conectividade-internet.ps1`
+## 10. Script `Gerenciar-Inicializacao-Windows.ps1`
 
 ### 10.1. Finalidade
+
+O script `Gerenciar-Inicializacao-Windows.ps1` é a ferramenta dedicada ao gerenciamento da inicialização do Windows.
+
+Ele usa o módulo `WbaToolkit.Startup` para coletar, exibir e, no modo assistido, modificar entradas das três fontes:
+
+- Registro (`Run` e `RunOnce` de HKLM e HKCU);
+- pasta de inicialização do usuário e do sistema;
+- tarefas agendadas com gatilho de logon ou boot.
+
+Exibe também o estado e tipo de inicialização dos serviços mais relevantes.
+
+> Use este script quando o objetivo for gerenciar exclusivamente a inicialização, sem executar o diagnóstico completo
+> de disco 100% que o `Diagnostico-Reparo-HD100.ps1` realiza.
+
+### 10.2. Quando usar
+
+Use quando:
+
+- o computador estiver lento no boot;
+- o usuário reclamar de programas desnecessários ao ligar;
+- precisar desabilitar serviços ou programas de inicialização para teste;
+- precisar ver o que inicia com o Windows sem executar diagnóstico de disco;
+- precisar reativar uma entrada desabilitada anteriormente pelo toolkit.
+
+### 10.3. Modos de execução
+
+| Modo | O que faz |
+|---|---|
+| `Diagnostico` | Apenas coleta e exibe informações, sem alterar nada (padrão) |
+| `Assistido` | Permite desabilitar, reativar ou remover entradas de forma interativa |
+
+### 10.4. Exemplos de uso
+
+Diagnóstico somente leitura:
+
+```powershell
+.\maintenance\Gerenciar-Inicializacao-Windows.ps1
+```
+
+Diagnóstico com relatório HTML:
+
+```powershell
+.\maintenance\Gerenciar-Inicializacao-Windows.ps1 -GerarHtml
+```
+
+Modo assistido para modificações:
+
+```powershell
+.\maintenance\Gerenciar-Inicializacao-Windows.ps1 -Modo Assistido
+```
+
+Simulação sem alterar o sistema:
+
+```powershell
+.\maintenance\Gerenciar-Inicializacao-Windows.ps1 -Modo Assistido -DryRun
+```
+
+Em pasta de saída específica:
+
+```powershell
+.\maintenance\Gerenciar-Inicializacao-Windows.ps1 -Modo Assistido -DiretorioSaida "D:\Atendimentos\Cliente01"
+```
+
+### 10.5. O que ele coleta e exibe
+
+- todos os itens de inicialização agrupados por fonte e escopo;
+- estado ON/OFF de cada entrada;
+- lista numerada para seleção no modo assistido;
+- estado e tipo de inicialização dos serviços principais.
+
+### 10.6. Relatórios gerados
+
+Os arquivos ficam em:
+
+```text
+C:\WBA\Relatorios\WbaToolkit.Startup\<timestamp>\
+```
+
+| Arquivo | Uso |
+|---|---|
+| `relatorio-inicializacao.txt` | Relatório em texto com itens, serviços e alterações |
+| `relatorio-inicializacao.json` | Dados estruturados para análise ou auditoria |
+| `alteracoes.json` | Registro de alterações quando houver modificações |
+| `logs\inicializacao.log` | Log da sessão |
+
+### 10.7. Segurança e reversibilidade
+
+Todas as desativações são reversíveis. Antes de qualquer alteração, os dados originais são salvos em:
+
+```text
+HKLM:\SOFTWARE\WBA\WindowsToolkit\Startup\Disabled
+```
+
+Para reativar, use o mesmo script no modo assistido e escolha a opção `H` (Habilitar) na entrada desejada.
+
+A remoção definitiva exige que o operador digite a frase `REMOVER INICIALIZACAO` para confirmar. Use com cuidado.
+
+### 10.8. Uso via módulo diretamente
+
+O módulo `WbaToolkit.Startup` pode ser usado independentemente do script:
+
+```powershell
+Import-Module .\modules\WbaToolkit.Startup\WbaToolkit.Startup.psd1 -Force
+
+# Ver todos os itens
+Get-StartupItem | Format-Table Name, SourceType, Enabled
+
+# Ver apenas desabilitados
+Get-StartupItem | Where-Object { -not $_.Enabled }
+
+# Desabilitar pelo nome
+$item = Get-StartupItem | Where-Object { $_.Name -eq 'OneDrive' }
+Disable-StartupItem -Item $item
+
+# Reativar
+$item = Get-StartupItem | Where-Object { $_.ManagedDisabled -and $_.Name -eq 'OneDrive' }
+Enable-StartupItem -Item $item
+```
+
+## 11. Script `Testar-conectividade-internet.ps1`
+
+### 11.1. Finalidade
 
 O script `Testar-conectividade-internet.ps1` executa um diagnóstico sequencial de conectividade com a internet. Ele
 usa o módulo `WbaToolkit.Networking` para verificar rede local, gateway, DNS, ICMP e TCP.
 
-### 10.2. Quando usar
+### 11.2. Quando usar
 
 Use quando houver:
 
@@ -703,7 +856,7 @@ Use quando houver:
 - suspeita de bloqueio em firewall;
 - necessidade de testar um destino, protocolo e portas específicas.
 
-### 10.3. Diagnóstico geral de internet
+### 11.3. Diagnóstico geral de internet
 
 ```powershell
 .\diagnostics\Testar-conectividade-internet.ps1
@@ -715,7 +868,7 @@ Com detalhes:
 .\diagnostics\Testar-conectividade-internet.ps1 -Detalhado
 ```
 
-### 10.4. Teste direcionado por alvo
+### 11.4. Teste direcionado por alvo
 
 Para testar um IP, nome DNS, protocolo e portas específicas, importe o módulo de rede:
 
@@ -733,15 +886,15 @@ $report = Invoke-TargetConnectivityTest -TargetAddress 192.168.5.10 -Protocol TC
 Show-ConnectivityReport -Report $report
 ```
 
-## 11. Script `limpeza-windows.ps1`
+## 12. Script `limpeza-windows.ps1`
 
-### 11.1. Finalidade
+### 12.1. Finalidade
 
 O script `limpeza-windows.ps1` faz limpeza segura e manutenção conservadora do Windows.
 
 Ele remove arquivos temporários, limpa caches, pode executar SFC/DISM, verificar eventos de disco e liberar espaço.
 
-### 11.2. Quando usar
+### 12.2. Quando usar
 
 Use quando:
 
@@ -752,7 +905,7 @@ Use quando:
 - precisar rodar SFC/DISM;
 - precisar executar manutenção preventiva.
 
-### 11.3. O que ele não remove
+### 12.3. O que ele não remove
 
 O script não remove:
 
@@ -764,7 +917,7 @@ O script não remove:
 - documentos dos usuários;
 - limpeza agressiva de registro.
 
-### 11.4. Execução recomendada
+### 12.4. Execução recomendada
 
 ```powershell
 Set-Location C:\ti\wba-windows-toolkit
@@ -773,7 +926,7 @@ Set-Location C:\ti\wba-windows-toolkit
 
 O parâmetro `-NoReboot` evita reinicialização automática.
 
-### 11.5. Principais parâmetros
+### 12.5. Principais parâmetros
 
 | Parâmetro | O que faz | Quando usar |
 |---|---|---|
@@ -792,7 +945,7 @@ O parâmetro `-NoReboot` evita reinicialização automática.
 | `-ChkdskAction` | `Schedule` ou `Skip` | Define se agenda CHKDSK |
 | `-EventLogCleanup` | `All`, `ErrorOnly` ou `None` | Define limpeza do Visualizador de Eventos |
 
-### 11.6. Exemplos seguros
+### 12.6. Exemplos seguros
 
 Limpeza sem reiniciar:
 
@@ -818,7 +971,7 @@ Automação conservadora:
 .\maintenance\limpeza-windows.ps1 -ChkdskAction Skip -EventLogCleanup None -NoReboot
 ```
 
-### 11.7. Onde fica o log
+### 12.7. Onde fica o log
 
 O script cria log em:
 
@@ -832,7 +985,7 @@ O nome costuma seguir o formato:
 yyyy-MM-dd_HHmmss-limpeza-windows.log
 ```
 
-### 11.8. Cuidados operacionais
+### 12.8. Cuidados operacionais
 
 - Use `-NoReboot` se o usuário estiver trabalhando.
 - Não use `-EventLogCleanup All` sem autorização.
@@ -840,9 +993,9 @@ yyyy-MM-dd_HHmmss-limpeza-windows.log
 - Não use `-DisableHibernation` se o usuário depende de hibernação.
 - Antes de `ChkdskAction Schedule`, avise que pode haver verificação no próximo boot.
 
-## 12. Script `upgrade-windows.ps1`
+## 13. Script `upgrade-windows.ps1`
 
-### 12.1. Finalidade
+### 13.1. Finalidade
 
 O script `upgrade-windows.ps1` aciona uma rotina simples e conservadora de atualização.
 
@@ -854,7 +1007,7 @@ Ele tenta:
 
 Ele não instala Chocolatey, não instala WinGet e não força reinicialização.
 
-### 12.2. Quando usar
+### 13.2. Quando usar
 
 Use quando:
 
@@ -862,7 +1015,7 @@ Use quando:
 - precisar atualizar pacotes gerenciados pelo Chocolatey;
 - precisar executar uma rotina básica de atualização sem módulos adicionais.
 
-### 12.3. Execução recomendada
+### 13.3. Execução recomendada
 
 ```powershell
 Set-Location C:\ti\wba-windows-toolkit
@@ -871,7 +1024,7 @@ Set-Location C:\ti\wba-windows-toolkit
 
 O parâmetro `-PauseAtEnd` mantém a janela aberta no final, útil para copiar mensagens e conferir o resultado.
 
-### 12.4. Principais parâmetros
+### 13.4. Principais parâmetros
 
 | Parâmetro | O que faz |
 |---|---|
@@ -882,7 +1035,7 @@ O parâmetro `-PauseAtEnd` mantém a janela aberta no final, útil para copiar m
 | `-NoRebootWarning` | Não exibe aviso de reinicialização |
 | `-PauseAtEnd` | Aguarda ENTER antes de fechar |
 
-### 12.5. Exemplos
+### 13.5. Exemplos
 
 Executar atualização completa:
 
@@ -908,7 +1061,7 @@ Manter janela aberta:
 .\updates\upgrade-windows.ps1 -PauseAtEnd
 ```
 
-### 12.6. Onde fica o log
+### 13.6. Onde fica o log
 
 O log fica em:
 
@@ -922,7 +1075,7 @@ Nome esperado:
 yyyy-MM-dd_HHmmss-upgrade-windows.log
 ```
 
-### 12.7. Como acompanhar o Windows Update
+### 13.7. Como acompanhar o Windows Update
 
 O `UsoClient.exe` normalmente não mostra progresso detalhado no console.
 
@@ -938,16 +1091,16 @@ Em Windows 11:
 Configurações > Windows Update
 ```
 
-### 12.8. Cuidados
+### 13.8. Cuidados
 
 - Atualizações podem exigir reinicialização.
 - Chocolatey depende da internet e do repositório configurado.
 - Se Chocolatey falhar por timeout, tente novamente mais tarde.
 - Não desligue o computador durante instalação de atualização.
 
-## 13. Fluxo de atendimento recomendado
+## 14. Fluxo de atendimento recomendado
 
-### 13.1. Quando o problema é disco 100%
+### 14.1. Quando o problema é disco 100%
 
 1. Abrir PowerShell como Administrador.
 2. Entrar na pasta do toolkit.
@@ -968,7 +1121,7 @@ Configurações > Windows Update
 7. Desabilitar apenas uma entrada de inicialização por vez.
 8. Reiniciar e testar.
 
-### 13.2. Quando o problema é pouco espaço em disco
+### 14.2. Quando o problema é pouco espaço em disco
 
 1. Executar:
 
@@ -979,7 +1132,7 @@ Configurações > Windows Update
 2. Verificar o log em `C:\WBA\Relatorios\Maintenance\<timestamp>\logs`.
 3. Confirmar espaço livre depois da execução.
 
-### 13.3. Quando o problema é sistema desatualizado
+### 14.3. Quando o problema é sistema desatualizado
 
 1. Executar:
 
@@ -990,7 +1143,7 @@ Configurações > Windows Update
 2. Conferir Windows Update nas Configurações.
 3. Reiniciar se o Windows solicitar.
 
-### 13.4. Quando o problema é tela preta ou travamento gráfico
+### 14.4. Quando o problema é tela preta ou travamento gráfico
 
 1. Executar:
 
@@ -1013,7 +1166,7 @@ Configurações > Windows Update
 
 5. Depois da intervenção, executar o resumo novamente e comparar a versão do driver.
 
-### 13.5. Quando precisa de manual local
+### 14.5. Quando precisa de manual local
 
 1. Importar módulo:
 
@@ -1033,7 +1186,7 @@ Export-ToolkitFunctionDocs -OutputPath .\docs-html -Force
 Start-Process .\docs-html\index.html
 ```
 
-## 14. Mensagens comuns e o que fazer
+## 15. Mensagens comuns e o que fazer
 
 | Mensagem ou situação | O que significa | O que fazer |
 |---|---|---|
@@ -1045,7 +1198,7 @@ Start-Process .\docs-html\index.html
 | CHKDSK informa agendamento | Verificação será no próximo boot | Avisar usuário antes de reiniciar |
 | Relatório HTML não abre | Caminho incorreto | Abrir o arquivo `index.html` ou `relatorio-hd100.html` correto |
 
-## 15. Regras de segurança para operador
+## 16. Regras de segurança para operador
 
 1. Comece sempre pelo modo diagnóstico.
 2. Leia o resumo antes de executar correções.
@@ -1058,7 +1211,7 @@ Start-Process .\docs-html\index.html
 9. Guarde o caminho do relatório e do log.
 10. Em dúvida, pare e escale para um técnico mais experiente.
 
-## 16. Checklist rápido
+## 17. Checklist rápido
 
 Antes de executar:
 

@@ -2,6 +2,22 @@
     <#
     .SYNOPSIS
         Valida resolução DNS para um nome informado.
+
+    .DESCRIPTION
+        Executa Resolve-DnsName para o nome e tipo de registro informados e retorna um objeto de resultado
+        padronizado com os registros obtidos em Details.
+
+    .PARAMETER Name
+        Nome DNS a ser resolvido.
+
+    .PARAMETER Type
+        Tipo de registro DNS. Valores suportados: A, AAAA, SRV, CNAME, TXT. Padrão: A.
+
+    .EXAMPLE
+        Test-DnsResolution -Name 'www.google.com'
+
+    .EXAMPLE
+        Test-DnsResolution -Name '_ldap._tcp.dominio.local' -Type SRV
     #>
     [CmdletBinding()]
     param(
@@ -17,7 +33,6 @@
     $startedAt = Get-Date
     try {
         $records = Resolve-DnsName -Name $Name -Type $Type -ErrorAction Stop
-        $ips = @($records | Where-Object { $_.IPAddress } | Select-Object -ExpandProperty IPAddress)
         New-ConnectivityResult -TestName 'Teste DNS' -Category 'DNS' -Protocol 'DNS' -Direction 'Outbound' -Scope 'WAN' `
             -Target $Name -Success $true -Status 'Resolvido' -Classification 'Success' -Details $records `
             -Recommendation 'Resolução DNS validada com sucesso.' -StartedAt $startedAt -FinishedAt (Get-Date) `

@@ -15,7 +15,7 @@
         [string[]]$DnsTargets = @('www.google.com', 'www.microsoft.com', 'www.cloudflare.com', 'www.msftconnecttest.com'),
 
         [Parameter(Mandatory = $false)]
-        [string[]]$DomainTargets = @('www.google.com', 'www.microsoft.com', 'www.cloudflare.com', 'www.msftconnecttest.com'),
+        [string[]]$DomainTargets = @('www.google.com', 'www.microsoft.com', 'www.cloudflare.com', 'www.amazon.com'),
 
         [Parameter(Mandatory = $false)]
         [int]$TcpPort = 443

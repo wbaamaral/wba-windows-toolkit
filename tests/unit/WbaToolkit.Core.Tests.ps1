@@ -102,6 +102,10 @@ Describe 'WbaToolkit.Core' {
             ConvertTo-HtmlSafe -Value '<a>&b' | Should -Be '&lt;a&gt;&amp;b'
         }
 
+        It 'Deve escapar aspas duplas' {
+            ConvertTo-HtmlSafe -Value '"valor"' | Should -Be '&quot;valor&quot;'
+        }
+
         It 'Deve retornar default quando valor e vazio' {
             ConvertTo-HtmlSafe -Value '' | Should -Be '<span class="muted">&mdash;</span>'
         }
@@ -206,6 +210,7 @@ Describe 'WbaToolkit.Core' {
             Test-Path -LiteralPath (Join-Path $outputPath 'functions/Get-StaticDocsMetadata.html') | Should -BeFalse
             Test-Path -LiteralPath (Join-Path $outputPath 'scripts/Diagnostico-Reparo-HD100.ps1.html') | Should -BeTrue
             Test-Path -LiteralPath (Join-Path $outputPath 'scripts/limpeza-windows.ps1.html') | Should -BeTrue
+            Test-Path -LiteralPath (Join-Path $outputPath 'scripts/Diagnostico-Driver-Grafico.ps1.html') | Should -BeTrue
             $result.ScriptCount | Should -BeGreaterThan 0
 
             $content = Get-Content -LiteralPath $result.Path -Raw

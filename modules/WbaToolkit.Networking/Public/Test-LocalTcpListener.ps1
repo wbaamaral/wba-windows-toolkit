@@ -2,6 +2,19 @@
     <#
     .SYNOPSIS
         Verifica se há listener TCP local em uma porta.
+
+    .DESCRIPTION
+        Consulta os listeners TCP ativos do sistema usando IPGlobalProperties e verifica se a porta
+        especificada está em escuta. Não requer conexão de rede.
+
+    .PARAMETER Port
+        Porta TCP local a verificar. Valores permitidos: 1–65535.
+
+    .EXAMPLE
+        Test-LocalTcpListener -Port 3389
+
+    .EXAMPLE
+        Test-LocalTcpListener -Port 445
     #>
     [CmdletBinding()]
     param(

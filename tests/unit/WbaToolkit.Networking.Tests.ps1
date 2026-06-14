@@ -66,6 +66,62 @@ Describe 'WbaToolkit.Networking' {
         }
     }
 
+    Context 'Listeners locais' {
+        It 'Test-LocalTcpListener deve retornar objeto de resultado' {
+            $result = Test-LocalTcpListener -Port 1
+            $result | Should -BeOfType [psobject]
+            $result.PSObject.Properties.Name | Should -Contain 'Classification'
+            $result.PSObject.Properties.Name | Should -Contain 'Protocol'
+            $result.Protocol | Should -Be 'TCP'
+        }
+
+        It 'Test-LocalUdpListener deve retornar objeto de resultado' {
+            $result = Test-LocalUdpListener -Port 1
+            $result | Should -BeOfType [psobject]
+            $result.PSObject.Properties.Name | Should -Contain 'Classification'
+            $result.Protocol | Should -Be 'UDP'
+        }
+    }
+
+    Context 'Plano de teste' {
+        It 'New-ConnectivityTestPlan deve retornar objeto com todos os campos' {
+            $plan = New-ConnectivityTestPlan
+            $plan | Should -BeOfType [psobject]
+            $plan.PSObject.Properties.Name | Should -Contain 'IpTargets'
+            $plan.PSObject.Properties.Name | Should -Contain 'DnsTargets'
+            $plan.PSObject.Properties.Name | Should -Contain 'DomainTargets'
+            $plan.PSObject.Properties.Name | Should -Contain 'TcpPort'
+            $plan.PSObject.Properties.Name | Should -Contain 'Detailed'
+        }
+
+        It 'New-ConnectivityTestPlan deve aceitar parametros customizados' {
+            $plan = New-ConnectivityTestPlan -IpTargets @('10.0.0.1') -TcpPort 80
+            @($plan.IpTargets) | Should -Contain '10.0.0.1'
+            $plan.TcpPort | Should -Be 80
+        }
+
+        It 'New-ConnectivityTestPlan deve rejeitar porta TCP invalida' {
+            { New-ConnectivityTestPlan -TcpPort 0 } | Should -Throw
+            { New-ConnectivityTestPlan -TcpPort 70000 } | Should -Throw
+        }
+
+        It 'DnsTargets e DomainTargets devem ter defaults distintos' {
+            $plan = New-ConnectivityTestPlan
+            $dns = ($plan.DnsTargets | Sort-Object) -join ','
+            $domain = ($plan.DomainTargets | Sort-Object) -join ','
+            $dns | Should -Not -Be $domain
+        }
+    }
+
+    Context 'Exportacao PDF sem navegador' {
+        It 'Export-ConnectivityReportPdf deve retornar falha graciosamente quando nao ha navegador' {
+            $fakePath = Join-Path ([System.IO.Path]::GetTempPath()) 'wba-fake-report.html'
+            $result = Export-ConnectivityReportPdf -HtmlPath $fakePath
+            $result | Should -BeOfType [psobject]
+            $result.Type | Should -Be 'PDF'
+        }
+    }
+
     Context 'Exportacao HTML' {
         It 'Deve gerar um arquivo HTML com o relatório' {
             $report = [pscustomobject]@{

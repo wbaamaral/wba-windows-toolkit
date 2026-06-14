@@ -2,6 +2,25 @@
     <#
     .SYNOPSIS
         Executa teste ICMP contra um destino informado.
+
+    .DESCRIPTION
+        Usa Test-Connection para enviar pacotes ICMP ao endereço informado e calcula a latência média.
+        Retorna um objeto de resultado padronizado com classificação Success ou Failed.
+
+    .PARAMETER TargetAddress
+        Endereço IP ou nome DNS do destino a ser testado.
+
+    .PARAMETER Count
+        Número de pacotes ICMP a enviar. Valores permitidos: 1–10. Padrão: 3.
+
+    .PARAMETER TimeoutSeconds
+        Tempo limite de espera por resposta em segundos. Valores permitidos: 1–60. Padrão: 5.
+
+    .EXAMPLE
+        Test-IcmpConnectivity -TargetAddress '8.8.8.8'
+
+    .EXAMPLE
+        Test-IcmpConnectivity -TargetAddress '192.168.1.1' -Count 2 -TimeoutSeconds 2
     #>
     [CmdletBinding()]
     param(
