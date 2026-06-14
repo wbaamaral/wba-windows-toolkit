@@ -6,6 +6,9 @@
     .DESCRIPTION
         Carrega o arquivo config.json em ProgramData. Quando o arquivo nao existe, retorna uma configuracao vazia
         com o caminho esperado para uso por outras funcoes.
+
+    .PARAMETER ConfigPath
+        Caminho alternativo para o arquivo config.json. Quando omitido, usa o caminho padrão em ProgramData.
     #>
     [CmdletBinding()]
     param(

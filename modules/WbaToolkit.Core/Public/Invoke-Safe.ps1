@@ -29,6 +29,7 @@
     )
 
     try {
+        $LASTEXITCODE = 0
         & $Command
 
         if ($LASTEXITCODE -ne $null -and $LASTEXITCODE -ne 0) {
