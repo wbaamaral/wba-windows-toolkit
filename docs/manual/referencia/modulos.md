@@ -2,7 +2,8 @@
 
 Autor: **wbaamaral**
 
-Para a referência HTML completa das funções (com CBH), execute `Export-ToolkitFunctionDocs` no Windows.
+Para o portal HTML completo (portal operacional + referência técnica CBH), execute `Export-ToolkitDocumentation` no Windows.
+Para apenas a referência técnica CBH, execute `Export-ToolkitFunctionDocs`.
 
 ## WbaToolkit.Core
 
@@ -61,7 +62,8 @@ Localização: `modules/WbaToolkit.Core/WbaToolkit.Core.psm1`
 | `Get-Utf8BomEncoding` | Retorna encoding UTF-8 com BOM |
 | `Write-TextFileUtf8` | Escreve arquivo texto em UTF-8 com BOM |
 | `ConvertTo-HtmlSafe` | Escapa conteúdo para uso em HTML |
-| `Export-ToolkitFunctionDocs` | Gera HTML de referência com CBH das funções |
+| `Export-ToolkitFunctionDocs` | Gera HTML de referência técnica com CBH das funções |
+| `Export-ToolkitDocumentation` | Gera portal HTML offline completo (portal operacional + referência técnica) |
 
 ## WbaToolkit.Networking
 
