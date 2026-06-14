@@ -463,4 +463,83 @@ Describe 'WbaToolkit.Core' {
             }
         }
     }
+
+    Context 'Export-ToolkitDocumentation' {
+        BeforeAll {
+            $repoRootLocal = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
+        }
+
+        It 'e exportada pelo modulo' {
+            (Get-Command Export-ToolkitDocumentation -ErrorAction Stop).CommandType | Should -Be 'Function'
+        }
+
+        It 'lanca excecao se OutputPath existe sem -Force' {
+            $tempDir = Join-Path ([System.IO.Path]::GetTempPath()) ([System.Guid]::NewGuid().ToString())
+            $null = New-Item -Path $tempDir -ItemType Directory -Force
+            try {
+                { Export-ToolkitDocumentation -Mode Portal -OutputPath $tempDir } | Should -Throw
+            }
+            finally {
+                Remove-Item -Recurse -Force -LiteralPath $tempDir -ErrorAction SilentlyContinue
+            }
+        }
+
+        It 'gera index.html e operador.html com -Mode Portal' {
+            $tempDir = Join-Path ([System.IO.Path]::GetTempPath()) ([System.Guid]::NewGuid().ToString())
+            try {
+                $result = Export-ToolkitDocumentation `
+                    -Mode Portal `
+                    -OutputPath $tempDir `
+                    -ManualPath (Join-Path $repoRootLocal 'docs\manual') `
+                    -Force
+                $result.Success | Should -Be $true
+                Test-Path (Join-Path $tempDir 'index.html')    | Should -Be $true
+                Test-Path (Join-Path $tempDir 'operador.html') | Should -Be $true
+                $content = [System.IO.File]::ReadAllText((Join-Path $tempDir 'index.html'))
+                $content | Should -Match 'WBA Windows Toolkit'
+            }
+            finally {
+                Remove-Item -Recurse -Force -LiteralPath $tempDir -ErrorAction SilentlyContinue
+            }
+        }
+
+        It 'gera referencia com -Mode TechnicalReference' {
+            $tempDir = Join-Path ([System.IO.Path]::GetTempPath()) ([System.Guid]::NewGuid().ToString())
+            try {
+                $coreModule = Join-Path $repoRootLocal 'modules\WbaToolkit.Core\WbaToolkit.Core.psd1'
+                $result = Export-ToolkitDocumentation `
+                    -Mode TechnicalReference `
+                    -OutputPath $tempDir `
+                    -ModulePath @($coreModule) `
+                    -ScriptPath @() `
+                    -Force
+                $result.Success | Should -Be $true
+                Test-Path (Join-Path $tempDir 'referencia\index.html') | Should -Be $true
+            }
+            finally {
+                Remove-Item -Recurse -Force -LiteralPath $tempDir -ErrorAction SilentlyContinue
+            }
+        }
+
+        It 'retorna objeto com propriedades esperadas' {
+            $tempDir = Join-Path ([System.IO.Path]::GetTempPath()) ([System.Guid]::NewGuid().ToString())
+            try {
+                $result = Export-ToolkitDocumentation `
+                    -Mode Portal `
+                    -OutputPath $tempDir `
+                    -ManualPath (Join-Path $repoRootLocal 'docs\manual') `
+                    -Force
+                $props = $result.PSObject.Properties.Name
+                $props | Should -Contain 'Success'
+                $props | Should -Contain 'Mode'
+                $props | Should -Contain 'OutputPath'
+                $props | Should -Contain 'PortalIndex'
+                $props | Should -Contain 'TechnicalReferenceIndex'
+                $props | Should -Contain 'WarningCount'
+            }
+            finally {
+                Remove-Item -Recurse -Force -LiteralPath $tempDir -ErrorAction SilentlyContinue
+            }
+        }
+    }
 }
