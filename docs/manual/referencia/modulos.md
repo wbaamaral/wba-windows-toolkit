@@ -1,0 +1,119 @@
+# Referência de Módulos — WBA Windows Toolkit
+
+Autor: **wbaamaral**
+
+Para a referência HTML completa das funções (com CBH), execute `Export-ToolkitFunctionDocs` no Windows.
+
+## WbaToolkit.Core
+
+Módulo base. Fornece funções compartilhadas por todos os scripts e módulos.
+
+Localização: `modules/WbaToolkit.Core/WbaToolkit.Core.psm1`
+
+### Saída padronizada
+
+| Função | Descrição |
+|---|---|
+| `Write-Ok` | Saída com indicador de sucesso |
+| `Write-Fail` | Saída com indicador de falha |
+| `Write-Warn` | Saída com indicador de aviso |
+| `Write-Info` | Saída informativa |
+| `Write-Title` | Cabeçalho de seção principal |
+| `Write-Section` | Cabeçalho de subseção |
+
+### Entrada do usuário
+
+| Função | Descrição |
+|---|---|
+| `Read-YesNo` | Confirmar ação com Sim/Não |
+| `Read-UserInput` | Ler entrada de texto com prompt |
+
+### Execução e segurança
+
+| Função | Descrição |
+|---|---|
+| `Test-IsAdministrator` | Verifica se a sessão é elevada |
+| `Invoke-Safe` | Executa bloco com tratamento de erro padronizado |
+| `Invoke-ExternalCommand` | Executa comando externo com captura de saída |
+| `Get-CimInstanceSafe` | Consulta CIM com fallback seguro |
+
+### Sessão e logging
+
+| Função | Descrição |
+|---|---|
+| `Initialize-ScriptSession` | Inicializa contexto padronizado de sessão |
+| `Initialize-ToolkitReportSession` | Cria estrutura de pastas para relatório |
+| `Write-ScriptLog` | Registra mensagem em arquivo de log e console |
+
+### Configuração e relatórios
+
+| Função | Descrição |
+|---|---|
+| `Get-ToolkitConfiguration` | Lê configuração persistente do toolkit |
+| `Set-ToolkitReportsRoot` | Define pasta padrão de relatórios |
+| `Get-ToolkitReportsRoot` | Retorna pasta padrão de relatórios |
+
+### Utilitários
+
+| Função | Descrição |
+|---|---|
+| `Format-FileSize` | Formata bytes em unidade legível |
+| `Get-Utf8BomEncoding` | Retorna encoding UTF-8 com BOM |
+| `Write-TextFileUtf8` | Escreve arquivo texto em UTF-8 com BOM |
+| `ConvertTo-HtmlSafe` | Escapa conteúdo para uso em HTML |
+| `Export-ToolkitFunctionDocs` | Gera HTML de referência com CBH das funções |
+
+## WbaToolkit.Networking
+
+Diagnóstico de conectividade, testes de rede e exportação de relatórios.
+
+Localização: `modules/WbaToolkit.Networking/WbaToolkit.Networking.psm1`
+
+| Função | Descrição |
+|---|---|
+| `Get-NetworkContext` | Contexto da interface de rede ativa |
+| `Test-GatewayConnectivity` | Testa conectividade com o gateway |
+| `Test-DnsResolution` | Teste de resolução DNS |
+| `Test-IcmpConnectivity` | Teste de ping ICMP |
+| `Test-TcpPortConnectivity` | Teste de porta TCP |
+| `Test-UdpPortConnectivity` | Teste de porta UDP |
+| `Test-LocalTcpListener` | Verifica listener TCP local |
+| `Test-LocalUdpListener` | Verifica listener UDP local |
+| `New-ConnectivityTestPlan` | Cria plano de testes de conectividade |
+| `Invoke-ConnectivityTest` | Executa plano de testes |
+| `Invoke-ConnectivityWizard` | Wizard interativo de conectividade |
+| `Invoke-TargetConnectivityTest` | Testa conectividade direcionada a alvo |
+| `Invoke-TargetConnectivityWizard` | Wizard de teste direcionado por alvo |
+| `Show-ConnectivityReport` | Exibe relatório de conectividade no console |
+| `Export-ConnectivityReport` | Exporta relatório HTML de conectividade |
+| `Export-ConnectivityReportPdf` | Exporta relatório para PDF |
+
+## WbaToolkit.Startup
+
+Gerenciamento de itens de inicialização do Windows.
+
+Localização: `modules/WbaToolkit.Startup/WbaToolkit.Startup.psm1`
+
+| Função | Descrição |
+|---|---|
+| `Get-StartupItem` | Lista itens de inicialização |
+| `Show-StartupItem` | Exibe itens de inicialização no console |
+| `Disable-StartupItem` | Desabilita item de inicialização |
+| `Enable-StartupItem` | Reabilita item de inicialização |
+| `Remove-StartupItem` | Remove item de inicialização |
+| `Invoke-StartupManager` | Ferramenta interativa de gerenciamento de startup |
+| `Get-ServiceStartupState` | Retorna tipo de inicialização de um serviço |
+
+## WbaToolkit.Maintenance
+
+Preparação de imagem corporativa com sysprep.
+
+Localização: `modules/WbaToolkit.Maintenance/WbaToolkit.Maintenance.psm1`
+
+| Função | Descrição |
+|---|---|
+| `Get-DefaultUserHivePath` | Localiza hive do perfil Default |
+| `Invoke-WithDefaultUserHive` | Executa bloco com hive Default montado em `HKU\WBA_DefaultProfile` |
+| `Import-RegistryTweakToDefaultProfile` | Importa arquivo `.reg` para o perfil Default |
+| `Test-SysprepEnvironment` | Valida pré-requisitos para sysprep corporativo |
+| `Invoke-SysprepPreparation` | Orquestra tweaks e dispara sysprep |
