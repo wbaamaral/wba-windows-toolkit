@@ -11,10 +11,10 @@
     Exibe informações adicionais no relatório em tela.
 
 .EXAMPLE
-    .\Testar-conectividade-internet.ps1
+    .\Testar-Conectividade-Internet.ps1
 
 .EXAMPLE
-    .\Testar-conectividade-internet.ps1 -Detalhado
+    .\Testar-Conectividade-Internet.ps1 -Detalhado
 #>
 
 [CmdletBinding()]

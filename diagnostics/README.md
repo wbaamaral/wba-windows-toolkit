@@ -54,7 +54,7 @@ relacionados a driver de vídeo.
 **Requisitos:** Windows 10/11. PowerShell 5.1+. Executar como administrador é recomendado para acesso completo a
 eventos e inventário de dispositivos.
 
-### `Testar-conectividade-internet.ps1`
+### `Testar-Conectividade-Internet.ps1`
 
 **Função:** Invólucro operacional do módulo `WbaToolkit.Networking` para diagnóstico completo e sequencial de
 conectividade com a internet.
@@ -80,10 +80,10 @@ As etapas são executadas em sequência obrigatória — uma etapa bloqueada imp
 
 ```powershell
 # Diagnóstico padrão
-.\Testar-conectividade-internet.ps1
+.\Testar-Conectividade-Internet.ps1
 
 # Com informações detalhadas
-.\Testar-conectividade-internet.ps1 -Detalhado
+.\Testar-Conectividade-Internet.ps1 -Detalhado
 ```
 
 **Saída:** Relatório em tela com status por teste, resumo final e bloqueio quando a rede local impede a continuação.

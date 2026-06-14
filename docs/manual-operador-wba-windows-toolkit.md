@@ -839,11 +839,11 @@ $item = Get-StartupItem | Where-Object { $_.ManagedDisabled -and $_.Name -eq 'On
 Enable-StartupItem -Item $item
 ```
 
-## 11. Script `Testar-conectividade-internet.ps1`
+## 11. Script `Testar-Conectividade-Internet.ps1`
 
 ### 11.1. Finalidade
 
-O script `Testar-conectividade-internet.ps1` executa um diagnóstico sequencial de conectividade com a internet. Ele
+O script `Testar-Conectividade-Internet.ps1` executa um diagnóstico sequencial de conectividade com a internet. Ele
 usa o módulo `WbaToolkit.Networking` para verificar rede local, gateway, DNS, ICMP e TCP.
 
 ### 11.2. Quando usar
@@ -859,13 +859,13 @@ Use quando houver:
 ### 11.3. Diagnóstico geral de internet
 
 ```powershell
-.\diagnostics\Testar-conectividade-internet.ps1
+.\diagnostics\Testar-Conectividade-Internet.ps1
 ```
 
 Com detalhes:
 
 ```powershell
-.\diagnostics\Testar-conectividade-internet.ps1 -Detalhado
+.\diagnostics\Testar-Conectividade-Internet.ps1 -Detalhado
 ```
 
 ### 11.4. Teste direcionado por alvo
