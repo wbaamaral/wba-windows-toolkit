@@ -1,0 +1,7 @@
+Windows Registry Editor Version 5.00
+
+; Desativa o identificador publicitario por usuario.
+; Impede que o sistema gere um ID unico para rastreamento de anuncios.
+
+[hkey_users\default\Software\Microsoft\Windows\CurrentVersion\AdvertisingInfo]
+"Enabled"=dword:00000000

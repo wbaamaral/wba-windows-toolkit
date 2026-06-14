@@ -1,0 +1,17 @@
+Windows Registry Editor Version 5.00
+
+; Desativa sugestoes de aplicativos, dicas e conteudo promovido pela Microsoft.
+; Aplica-se ao gerenciador de entrega de conteudo por usuario.
+
+[hkey_users\default\Software\Microsoft\Windows\CurrentVersion\ContentDeliveryManager]
+"FeatureManagementEnabled"=dword:00000000
+"OemPreInstalledAppsEnabled"=dword:00000000
+"PreInstalledAppsEnabled"=dword:00000000
+"PreInstalledAppsEverEnabled"=dword:00000000
+"SilentInstalledAppsEnabled"=dword:00000000
+"SoftLandingEnabled"=dword:00000000
+"SystemPaneSuggestionsEnabled"=dword:00000000
+"SubscribedContent-310093Enabled"=dword:00000000
+"SubscribedContent-338388Enabled"=dword:00000000
+"SubscribedContent-338389Enabled"=dword:00000000
+"SubscribedContent-338393Enabled"=dword:00000000

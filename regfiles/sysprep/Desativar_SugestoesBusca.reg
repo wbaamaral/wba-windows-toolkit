@@ -1,0 +1,12 @@
+Windows Registry Editor Version 5.00
+
+; Desativa sugestoes de busca na nuvem e historico de pesquisa por usuario.
+; DisableSearchBoxSuggestions compativel com Windows 10 e Windows 11.
+
+[hkey_users\default\Software\Policies\Microsoft\Windows\Explorer]
+"DisableSearchBoxSuggestions"=dword:00000001
+
+[hkey_users\default\Software\Microsoft\Windows\CurrentVersion\SearchSettings]
+"IsAADCloudSearchEnabled"=dword:00000000
+"IsMSACloudSearchEnabled"=dword:00000000
+"IsDeviceSearchHistoryEnabled"=dword:00000000

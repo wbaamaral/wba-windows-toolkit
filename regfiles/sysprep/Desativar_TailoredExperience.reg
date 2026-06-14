@@ -1,0 +1,7 @@
+Windows Registry Editor Version 5.00
+
+; Desativa experiencias personalizadas baseadas em dados de diagnostico.
+; Compativel com Windows 10 e Windows 11.
+
+[hkey_users\default\Software\Microsoft\Windows\CurrentVersion\Privacy]
+"TailoredExperiencesWithDiagnosticDataEnabled"=dword:00000000
