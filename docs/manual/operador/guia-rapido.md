@@ -102,3 +102,15 @@ Padrão: `C:\WBA\Relatorios\<Script>\<timestamp>\`
 - Logs: `logs\`
 - Relatórios HTML: `<nome-relatorio>.html`
 - Backups: `backups\`
+
+## Gerar portal de documentação HTML
+
+```powershell
+Import-Module .\modules\WbaToolkit.Core\WbaToolkit.Core.psd1
+# Portal completo (portal operacional + referência técnica):
+Export-ToolkitDocumentation -Mode All -Force
+# Abre em: .\docs\portal\index.html
+
+# Apenas portal operacional (mais rápido):
+Export-ToolkitDocumentation -Mode Portal -Force
+```

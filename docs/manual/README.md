@@ -30,7 +30,8 @@ Destinada a desenvolvedores que estendem ou mantêm os módulos.
 | Documento | Finalidade |
 |---|---|
 | [`referencia/modulos.md`](referencia/modulos.md) | Catálogo de módulos e funções públicas |
-| Gerado por `Export-ToolkitFunctionDocs` | Referência HTML de funções (executar localmente no Windows) |
+| Gerado por `Export-ToolkitDocumentation` | Portal HTML offline completo: portal operacional + referência técnica (executar no Windows) |
+| Gerado por `Export-ToolkitFunctionDocs` | Apenas referência HTML das funções com CBH (usado internamente pelo comando acima) |
 
 ## Scripts por função operacional
 
@@ -86,7 +87,7 @@ Destinada a desenvolvedores que estendem ou mantêm os módulos.
 
 | Módulo | Funções públicas | Uso |
 |---|---|---|
-| `WbaToolkit.Core` | 23 | Funções base compartilhadas por todos os scripts |
+| `WbaToolkit.Core` | 24 | Funções base compartilhadas por todos os scripts |
 | `WbaToolkit.Networking` | 16 | Diagnóstico de conectividade e relatórios de rede |
 | `WbaToolkit.Startup` | 7 | Gerenciamento de itens de inicialização do Windows |
 | `WbaToolkit.Maintenance` | 5 | Preparação de imagem corporativa (sysprep) |
@@ -96,6 +97,12 @@ Destinada a desenvolvedores que estendem ou mantêm os módulos.
 No Windows (PowerShell 5.1):
 
 ```powershell
-Import-Module .\modules\WbaToolkit.Core\WbaToolkit.Core.psm1
-Export-ToolkitFunctionDocs -OutputPath .\docs\referencia-tecnica.html
+# Portal completo (portal operacional + referência técnica):
+Import-Module .\modules\WbaToolkit.Core\WbaToolkit.Core.psd1
+Export-ToolkitDocumentation -Mode All -Force
+# Resultado em: .\docs\portal\index.html
+
+# Apenas referência técnica CBH:
+Export-ToolkitDocumentation -Mode TechnicalReference -Force
+# Resultado em: .\docs\portal\referencia\index.html
 ```
