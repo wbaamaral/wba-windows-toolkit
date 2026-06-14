@@ -36,7 +36,12 @@
 
     $data['ReportsRoot'] = $resolvedPath
     $encoding = [System.Text.UTF8Encoding]::new($true)
-    [System.IO.File]::WriteAllText($ConfigPath, ($data | ConvertTo-Json -Depth 6), $encoding)
+    try {
+        [System.IO.File]::WriteAllText($ConfigPath, ($data | ConvertTo-Json -Depth 6), $encoding)
+    }
+    catch {
+        throw "Nao foi possivel gravar a configuracao em '$ConfigPath'. $($_.Exception.Message)"
+    }
 
     return [pscustomobject]@{
         Success = $true

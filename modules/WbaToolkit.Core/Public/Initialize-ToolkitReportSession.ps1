@@ -6,6 +6,18 @@
     .DESCRIPTION
         Resolve a raiz de relatorios, cria a pasta agrupadora do modulo, cria a subpasta da execucao com timestamp
         e devolve caminhos padronizados para relatorios, logs e backups.
+
+    .PARAMETER ModuleName
+        Nome do módulo ou domínio funcional. Usado como subpasta de agrupamento dentro da raiz de relatórios.
+
+    .PARAMETER ReportsRoot
+        Raiz de relatórios informada pelo chamador. Quando omitida, usa Get-ToolkitReportsRoot.
+
+    .PARAMETER ExecutionName
+        Nome da subpasta da execução. Padrão: timestamp no formato yyyy-MM-dd_HHmmss.
+
+    .PARAMETER ConfigPath
+        Caminho alternativo para o arquivo config.json. Quando omitido, usa o caminho padrão em ProgramData.
     #>
     [CmdletBinding()]
     param(

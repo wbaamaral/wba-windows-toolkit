@@ -27,5 +27,5 @@
         return $Default
     }
 
-    return ([string]$Value) -replace '&','&amp;' -replace '<','&lt;' -replace '>','&gt;'
+    return ([string]$Value) -replace '&','&amp;' -replace '<','&lt;' -replace '>','&gt;' -replace '"','&quot;'
 }
