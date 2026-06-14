@@ -35,7 +35,7 @@ Describe 'Uso do modulo compartilhado' {
     }
 
     It 'Script de diagnostico deve importar WbaToolkit.Networking' {
-        Get-Content -LiteralPath (Join-Path $repoRoot 'diagnostics/networking/Testar-conectividade-internet.ps1') -Raw |
+        Get-Content -LiteralPath (Join-Path $repoRoot 'diagnostics/networking/Testar-Conectividade-Internet.ps1') -Raw |
             Should -Match 'WbaToolkit\.Networking\.psd1'
     }
 
