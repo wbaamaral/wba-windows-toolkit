@@ -92,23 +92,10 @@ function Add-TestResult {
 
 function Read-ValueWithDefault {
     param(
-        [Parameter(Mandatory = $true)]
-        [string]$Question,
-
-        [Parameter(Mandatory = $false)]
-        [string]$DefaultValue
+        [Parameter(Mandatory = $true)][string]$Question,
+        [Parameter(Mandatory = $false)][string]$DefaultValue
     )
-
-    if ([string]::IsNullOrWhiteSpace($DefaultValue)) {
-        return (Read-Host $Question).Trim()
-    }
-
-    $value = Read-Host "$Question [$DefaultValue]"
-    if ([string]::IsNullOrWhiteSpace($value)) {
-        return $DefaultValue
-    }
-
-    return $value.Trim()
+    return Read-UserInput -Question $Question -DefaultValue $DefaultValue
 }
 
 function Test-IsIPv4 {

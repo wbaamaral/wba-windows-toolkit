@@ -139,78 +139,41 @@ if ($Modo -eq 'Assistido') {
 function Get-GfxUtf8BomEncoding {
     [CmdletBinding()]
     param()
-
-    return [System.Text.UTF8Encoding]::new($true)
+    return Get-Utf8BomEncoding
 }
 
 function Write-GfxTextFile {
     [CmdletBinding()]
     param(
-        [Parameter(Mandatory = $true)]
-        [string]$Path,
-
-        [Parameter(Mandatory = $true)]
-        [AllowEmptyString()]
-        [string]$Content,
-
+        [Parameter(Mandatory = $true)][string]$Path,
+        [Parameter(Mandatory = $true)][AllowEmptyString()][string]$Content,
         [switch]$Append
     )
-
-    $encoding = Get-GfxUtf8BomEncoding
-    if ($Append -and (Test-Path -LiteralPath $Path)) {
-        [System.IO.File]::AppendAllText($Path, $Content, $encoding)
-    }
-    else {
-        [System.IO.File]::WriteAllText($Path, $Content, $encoding)
-    }
+    Write-TextFileUtf8 -Path $Path -Content $Content -Append:$Append
 }
 
 function Initialize-GfxSession {
     [CmdletBinding()]
-    param(
-        [string]$BasePath,
-        [string]$ExecutionMode
-    )
+    param([string]$BasePath, [string]$ExecutionMode)
 
-    $reportSession = Initialize-ToolkitReportSession -ReportsRoot $BasePath -ModuleName 'Diagnostics'
-
-    return [pscustomobject]@{
-        StartedAt = Get-Date
-        Mode = $ExecutionMode
-        ReportsRoot = $reportSession.ReportsRoot
-        BasePath = $reportSession.ModulePath
-        Path = $reportSession.Path
-        LogsPath = $reportSession.LogsPath
-        BackupsPath = $reportSession.BackupsPath
-        TextReportPath = Join-Path $reportSession.Path 'relatorio-driver-grafico.txt'
-        HtmlReportPath = Join-Path $reportSession.Path 'relatorio-driver-grafico.html'
-        JsonReportPath = Join-Path $reportSession.Path 'diagnostico-driver-grafico.json'
-        TranscriptPath = Join-Path $reportSession.LogsPath 'driver-grafico-transcript.log'
-        InternalLogPath = Join-Path $reportSession.LogsPath 'driver-grafico.log'
-        DxDiagPath = Join-Path $reportSession.LogsPath 'dxdiag.txt'
-    }
+    $s = Initialize-ScriptSession -ModuleName 'Diagnostics' -BasePath $BasePath -ExecutionMode $ExecutionMode
+    $s | Add-Member -MemberType NoteProperty -Name 'TextReportPath'  -Value (Join-Path $s.Path     'relatorio-driver-grafico.txt')
+    $s | Add-Member -MemberType NoteProperty -Name 'HtmlReportPath'  -Value (Join-Path $s.Path     'relatorio-driver-grafico.html')
+    $s | Add-Member -MemberType NoteProperty -Name 'JsonReportPath'  -Value (Join-Path $s.Path     'diagnostico-driver-grafico.json')
+    $s | Add-Member -MemberType NoteProperty -Name 'TranscriptPath'  -Value (Join-Path $s.LogsPath 'driver-grafico-transcript.log')
+    $s | Add-Member -MemberType NoteProperty -Name 'InternalLogPath' -Value (Join-Path $s.LogsPath 'driver-grafico.log')
+    $s | Add-Member -MemberType NoteProperty -Name 'DxDiagPath'      -Value (Join-Path $s.LogsPath 'dxdiag.txt')
+    return $s
 }
 
 function Write-GfxLog {
     [CmdletBinding()]
     param(
-        [Parameter(Mandatory = $true)]
-        [string]$Message,
-
-        [ValidateSet('INFO', 'WARN', 'ERROR')]
-        [string]$Level = 'INFO'
+        [Parameter(Mandatory = $true)][string]$Message,
+        [ValidateSet('INFO', 'WARN', 'ERROR')][string]$Level = 'INFO'
     )
-
-    $line = '{0} [{1}] {2}' -f (Get-Date -Format 'yyyy-MM-dd HH:mm:ss'), $Level, $Message
-    if ($script:GfxSession) {
-        $line | Add-Content -LiteralPath $script:GfxSession.InternalLogPath
-    }
-
-    switch ($Level) {
-        'WARN'  { Write-Warn $Message }
-        'ERROR' { Write-Fail $Message }
-        default { Write-Info $Message }
-    }
+    $logPath = if ($script:GfxSession) { $script:GfxSession.InternalLogPath } else { $null }
+    Write-ScriptLog -Message $Message -Level $Level -LogPath $logPath
 }
 
 function Write-GfxSection {
@@ -305,27 +268,11 @@ function New-GfxFinding {
 function Get-GfxSafeCimInstance {
     [CmdletBinding()]
     param(
-        [Parameter(Mandatory = $true)]
-        [string]$ClassName,
-
-        [Parameter(Mandatory = $false)]
+        [Parameter(Mandatory = $true)][string]$ClassName,
         [string]$Namespace = 'root/cimv2',
-
-        [Parameter(Mandatory = $false)]
         [string]$Filter
     )
-
-    try {
-        if ([string]::IsNullOrWhiteSpace($Filter)) {
-            return @(Get-CimInstance -ClassName $ClassName -Namespace $Namespace -ErrorAction Stop)
-        }
-
-        return @(Get-CimInstance -ClassName $ClassName -Namespace $Namespace -Filter $Filter -ErrorAction Stop)
-    }
-    catch {
-        Write-GfxLog -Level 'WARN' -Message "Falha ao consultar CIM $Namespace/$ClassName. $($_.Exception.Message)"
-        return @()
-    }
+    return @(Get-CimInstanceSafe -ClassName $ClassName -Namespace $Namespace -Filter $Filter)
 }
 
 function Get-GfxVideoInventory {
