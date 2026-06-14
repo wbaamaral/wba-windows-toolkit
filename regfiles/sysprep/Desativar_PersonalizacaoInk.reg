@@ -1,0 +1,14 @@
+Windows Registry Editor Version 5.00
+
+; Desativa a coleta de dados de personalizacao de escrita manual e texto.
+; Impede que o sistema aprenda padroes de digitacao e tinta do usuario.
+
+[hkey_users\default\Software\Microsoft\InputPersonalization]
+"RestrictImplicitInkCollection"=dword:00000001
+"RestrictImplicitTextCollection"=dword:00000001
+
+[hkey_users\default\Software\Microsoft\InputPersonalization\TrainedDataStore]
+"HarvestContacts"=dword:00000000
+
+[hkey_users\default\Software\Microsoft\Personalization\Settings]
+"AcceptedPrivacyPolicy"=dword:00000000
