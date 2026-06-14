@@ -4,6 +4,13 @@
 
 
 
+## [v1.1.1] — 2026-06-14
+
+### Alterado
+- `docs/manual/README.md`: `Export-ToolkitDocumentation` adicionado na referência técnica; contagem de funções do Core corrigida (23→24); exemplo de geração atualizado
+- `docs/manual/referencia/modulos.md`: `Export-ToolkitDocumentation` adicionado na tabela de utilitários do Core; cabeçalho atualizado
+- `docs/manual/operador/guia-rapido.md`: seção de geração de portal HTML adicionada
+
 ## [v1.1.0] — 2026-06-14
 
 ### Adicionado
