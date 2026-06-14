@@ -2,6 +2,18 @@
     <#
     .SYNOPSIS
         Exibe o relatório de conectividade em tela.
+
+    .DESCRIPTION
+        Formata e imprime no console o objeto de relatório retornado por Invoke-ConnectivityTest ou
+        Invoke-TargetConnectivityTest, incluindo contexto de rede, resumo de classificações e detalhe
+        de cada teste executado.
+
+    .PARAMETER Report
+        Objeto de relatório gerado por Invoke-ConnectivityTest ou Invoke-TargetConnectivityTest.
+
+    .EXAMPLE
+        $report = Invoke-ConnectivityTest
+        Show-ConnectivityReport -Report $report
     #>
     [CmdletBinding()]
     param(
@@ -30,6 +42,12 @@
     Write-Host ("Falhas       : {0}" -f $Report.Summary.Failed) -ForegroundColor Red
     Write-Host ("Avisos       : {0}" -f $Report.Summary.Warning) -ForegroundColor Yellow
     Write-Host ("Inconclusivo : {0}" -f $Report.Summary.Inconclusive) -ForegroundColor Cyan
+    if ($Report.Summary.Error -gt 0) {
+        Write-Host ("Erros        : {0}" -f $Report.Summary.Error) -ForegroundColor Red
+    }
+    if ($Report.Summary.Skipped -gt 0) {
+        Write-Host ("Ignorados    : {0}" -f $Report.Summary.Skipped) -ForegroundColor DarkGray
+    }
 
     if ($Report.Blocked) {
         Write-Host ''

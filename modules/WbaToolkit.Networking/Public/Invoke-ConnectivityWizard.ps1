@@ -2,6 +2,14 @@
     <#
     .SYNOPSIS
         Executa um wizard simples para o diagnóstico de conectividade.
+
+    .DESCRIPTION
+        Apresenta um menu mínimo no console permitindo ao operador iniciar a bateria completa de testes
+        de conectividade via Invoke-ConnectivityTest e exibir o resultado com Show-ConnectivityReport.
+        Para wizard interativo por alvo específico, use Invoke-TargetConnectivityWizard.
+
+    .EXAMPLE
+        Invoke-ConnectivityWizard
     #>
     [CmdletBinding()]
     param()

@@ -2,6 +2,22 @@
     <#
     .SYNOPSIS
         Exporta o relatório HTML para PDF quando houver navegador compatível.
+
+    .DESCRIPTION
+        Detecta msedge, chromium ou google-chrome e usa o modo headless para imprimir o HTML em PDF.
+        Retorna um objeto com Success=$false e mensagem explicativa se nenhum navegador for encontrado.
+
+    .PARAMETER HtmlPath
+        Caminho completo do arquivo HTML de origem, gerado por Export-ConnectivityReport.
+
+    .PARAMETER PdfPath
+        Caminho de saída do PDF. Padrão: mesmo nome do HTML com extensão .pdf.
+
+    .EXAMPLE
+        Export-ConnectivityReportPdf -HtmlPath 'C:\WBA\Relatorios\Networking\relatorio.html'
+
+    .EXAMPLE
+        Export-ConnectivityReportPdf -HtmlPath 'C:\ti\relatorio.html' -PdfPath 'C:\ti\relatorio.pdf'
     #>
     [CmdletBinding()]
     param(

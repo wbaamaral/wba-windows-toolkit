@@ -5,6 +5,7 @@ BeforeAll {
     $repoRoot = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
     $script:scriptPaths = @(
         (Join-Path $repoRoot 'configuration/Configurar-Idioma-Regional.ps1'),
+        (Join-Path $repoRoot 'diagnostics/Diagnostico-Driver-Grafico.ps1'),
         (Join-Path $repoRoot 'maintenance/Diagnostico-Reparo-HD100.ps1'),
         (Join-Path $repoRoot 'maintenance/limpeza-windows.ps1'),
         (Join-Path $repoRoot 'updates/upgrade-windows.ps1'),
@@ -34,7 +35,7 @@ Describe 'Uso do modulo compartilhado' {
     }
 
     It 'Script de diagnostico deve importar WbaToolkit.Networking' {
-        Get-Content -LiteralPath (Join-Path $repoRoot 'diagnostics/Testar-conectividade-internet.ps1') -Raw |
+        Get-Content -LiteralPath (Join-Path $repoRoot 'diagnostics/networking/Testar-conectividade-internet.ps1') -Raw |
             Should -Match 'WbaToolkit\.Networking\.psd1'
     }
 

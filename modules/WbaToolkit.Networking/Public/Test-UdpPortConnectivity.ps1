@@ -2,6 +2,32 @@
     <#
     .SYNOPSIS
         Executa teste UDP básico e classifica o resultado como inconclusivo quando não há confirmação.
+
+    .DESCRIPTION
+        Envia um datagrama UDP mínimo ao destino. Como UDP é sem conexão, a ausência de erro apenas
+        indica que o envio ocorreu — não há confirmação de que a porta está aberta. O resultado
+        é sempre classificado como Inconclusive (sucesso de envio) ou Failed (erro de socket).
+
+    .PARAMETER TargetAddress
+        Endereço IP ou nome DNS do destino.
+
+    .PARAMETER Port
+        Porta UDP a testar. Valores permitidos: 1–65535.
+
+    .PARAMETER TimeoutSeconds
+        Reservado para compatibilidade futura. Atualmente não aplica timeout de resposta UDP.
+
+    .PARAMETER Direction
+        Direção do teste: Inbound ou Outbound. Padrão: Outbound.
+
+    .PARAMETER Scope
+        Escopo da conectividade: LAN ou WAN. Padrão: WAN.
+
+    .EXAMPLE
+        Test-UdpPortConnectivity -TargetAddress '10.0.0.1' -Port 53
+
+    .EXAMPLE
+        Test-UdpPortConnectivity -TargetAddress '192.168.1.1' -Port 161 -Scope LAN
     #>
     [CmdletBinding()]
     param(

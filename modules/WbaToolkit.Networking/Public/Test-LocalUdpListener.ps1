@@ -2,6 +2,19 @@
     <#
     .SYNOPSIS
         Verifica se há endpoint UDP local em uma porta.
+
+    .DESCRIPTION
+        Consulta os endpoints UDP ativos do sistema usando IPGlobalProperties e verifica se a porta
+        especificada está registrada. Não realiza tráfego de rede.
+
+    .PARAMETER Port
+        Porta UDP local a verificar. Valores permitidos: 1–65535.
+
+    .EXAMPLE
+        Test-LocalUdpListener -Port 53
+
+    .EXAMPLE
+        Test-LocalUdpListener -Port 161
     #>
     [CmdletBinding()]
     param(

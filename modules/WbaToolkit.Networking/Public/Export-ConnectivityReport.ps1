@@ -47,7 +47,12 @@
 
     $html = ConvertTo-ConnectivityReportHtml -Report $Report
     $encoding = [System.Text.UTF8Encoding]::new($true)
-    [System.IO.File]::WriteAllText($Path, $html, $encoding)
+    try {
+        [System.IO.File]::WriteAllText($Path, $html, $encoding)
+    }
+    catch {
+        throw "Nao foi possivel gravar o relatorio HTML em '$Path'. $($_.Exception.Message)"
+    }
 
     [pscustomobject]@{
         Success = $true

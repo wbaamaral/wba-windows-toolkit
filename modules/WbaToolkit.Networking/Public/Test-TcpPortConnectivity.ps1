@@ -2,6 +2,31 @@
     <#
     .SYNOPSIS
         Executa teste de conectividade TCP em porta informada.
+
+    .DESCRIPTION
+        Tenta estabelecer conexão TCP assíncrona no destino e porta especificados, respeitando o timeout.
+        Retorna resultado padronizado com status Aberta, Timeout ou Falha.
+
+    .PARAMETER TargetAddress
+        Endereço IP ou nome DNS do destino.
+
+    .PARAMETER Port
+        Porta TCP a testar. Valores permitidos: 1–65535.
+
+    .PARAMETER TimeoutSeconds
+        Tempo limite de conexão em segundos. Valores permitidos: 1–60. Padrão: 5.
+
+    .PARAMETER Direction
+        Direção do teste: Inbound ou Outbound. Padrão: Outbound.
+
+    .PARAMETER Scope
+        Escopo da conectividade: LAN ou WAN. Padrão: WAN.
+
+    .EXAMPLE
+        Test-TcpPortConnectivity -TargetAddress '8.8.8.8' -Port 443
+
+    .EXAMPLE
+        Test-TcpPortConnectivity -TargetAddress '10.0.0.1' -Port 3389 -Scope LAN -TimeoutSeconds 3
     #>
     [CmdletBinding()]
     param(
