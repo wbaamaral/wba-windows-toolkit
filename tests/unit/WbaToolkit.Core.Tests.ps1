@@ -67,6 +67,34 @@ Describe 'WbaToolkit.Core' {
             (Get-Command Set-ToolkitReportsRoot -ErrorAction Stop).CommandType | Should -Be 'Function'
             (Get-Command Initialize-ToolkitReportSession -ErrorAction Stop).CommandType | Should -Be 'Function'
         }
+
+        It 'Deve exportar Read-UserInput' {
+            (Get-Command Read-UserInput -ErrorAction Stop).CommandType | Should -Be 'Function'
+        }
+
+        It 'Deve exportar Get-Utf8BomEncoding' {
+            (Get-Command Get-Utf8BomEncoding -ErrorAction Stop).CommandType | Should -Be 'Function'
+        }
+
+        It 'Deve exportar Write-TextFileUtf8' {
+            (Get-Command Write-TextFileUtf8 -ErrorAction Stop).CommandType | Should -Be 'Function'
+        }
+
+        It 'Deve exportar Write-ScriptLog' {
+            (Get-Command Write-ScriptLog -ErrorAction Stop).CommandType | Should -Be 'Function'
+        }
+
+        It 'Deve exportar Initialize-ScriptSession' {
+            (Get-Command Initialize-ScriptSession -ErrorAction Stop).CommandType | Should -Be 'Function'
+        }
+
+        It 'Deve exportar Get-CimInstanceSafe' {
+            (Get-Command Get-CimInstanceSafe -ErrorAction Stop).CommandType | Should -Be 'Function'
+        }
+
+        It 'Deve exportar Get-ToolkitConfiguration' {
+            (Get-Command Get-ToolkitConfiguration -ErrorAction Stop).CommandType | Should -Be 'Function'
+        }
     }
 
     Context 'Formatacao de tamanho' {
@@ -249,6 +277,189 @@ Describe 'WbaToolkit.Core' {
                 if (Test-Path -LiteralPath $cleanupPath) {
                     Remove-Item -LiteralPath $cleanupPath -Recurse -Force
                 }
+            }
+        }
+    }
+
+    Context 'Entrada do operador' {
+        BeforeEach {
+            Mock Read-Host { return 'valor-digitado' }
+        }
+
+        It 'Read-UserInput deve retornar o valor digitado pelo operador' {
+            $result = Read-UserInput -Question 'Pergunta'
+            $result | Should -Be 'valor-digitado'
+        }
+
+        It 'Read-UserInput deve retornar DefaultValue quando operador pressiona ENTER sem digitar' {
+            Mock Read-Host { return '' }
+            $result = Read-UserInput -Question 'Pergunta' -DefaultValue 'padrao'
+            $result | Should -Be 'padrao'
+        }
+
+        It 'Read-UserInput deve retornar valor digitado mesmo quando DefaultValue e informado' {
+            Mock Read-Host { return 'digitado' }
+            $result = Read-UserInput -Question 'Pergunta' -DefaultValue 'padrao'
+            $result | Should -Be 'digitado'
+        }
+    }
+
+    Context 'Encoding UTF-8 com BOM' {
+        It 'Get-Utf8BomEncoding deve retornar System.Text.UTF8Encoding' {
+            $enc = Get-Utf8BomEncoding
+            $enc | Should -BeOfType [System.Text.UTF8Encoding]
+        }
+
+        It 'Get-Utf8BomEncoding deve retornar encoding com bytes de BOM 0xEF 0xBB 0xBF' {
+            $preamble = Get-Utf8BomEncoding | ForEach-Object { $_.GetPreamble() }
+            $preamble.Count | Should -Be 3
+            $preamble[0] | Should -Be 0xEF
+            $preamble[1] | Should -Be 0xBB
+            $preamble[2] | Should -Be 0xBF
+        }
+
+        It 'Write-TextFileUtf8 deve criar arquivo com BOM' {
+            $path = Join-Path ([System.IO.Path]::GetTempPath()) ('wba-utf8-' + [guid]::NewGuid().ToString() + '.txt')
+            try {
+                Write-TextFileUtf8 -Path $path -Content 'conteudo de teste'
+                Test-Path -LiteralPath $path | Should -BeTrue
+                $bytes = [System.IO.File]::ReadAllBytes($path)
+                $bytes[0] | Should -Be 0xEF
+                $bytes[1] | Should -Be 0xBB
+                $bytes[2] | Should -Be 0xBF
+            }
+            finally {
+                if (Test-Path -LiteralPath $path) { Remove-Item -LiteralPath $path -Force }
+            }
+        }
+
+        It 'Write-TextFileUtf8 deve sobrescrever arquivo existente por padrao' {
+            $path = Join-Path ([System.IO.Path]::GetTempPath()) ('wba-utf8-' + [guid]::NewGuid().ToString() + '.txt')
+            try {
+                Write-TextFileUtf8 -Path $path -Content 'primeiro'
+                Write-TextFileUtf8 -Path $path -Content 'segundo'
+                $content = [System.IO.File]::ReadAllText($path, (Get-Utf8BomEncoding))
+                $content | Should -Be 'segundo'
+            }
+            finally {
+                if (Test-Path -LiteralPath $path) { Remove-Item -LiteralPath $path -Force }
+            }
+        }
+
+        It 'Write-TextFileUtf8 deve acrescentar conteudo em modo Append' {
+            $path = Join-Path ([System.IO.Path]::GetTempPath()) ('wba-utf8-' + [guid]::NewGuid().ToString() + '.txt')
+            try {
+                Write-TextFileUtf8 -Path $path -Content 'linha1'
+                Write-TextFileUtf8 -Path $path -Content 'linha2' -Append
+                $content = [System.IO.File]::ReadAllText($path, (Get-Utf8BomEncoding))
+                $content | Should -Match 'linha1'
+                $content | Should -Match 'linha2'
+            }
+            finally {
+                if (Test-Path -LiteralPath $path) { Remove-Item -LiteralPath $path -Force }
+            }
+        }
+    }
+
+    Context 'Log de script' {
+        It 'Write-ScriptLog deve gravar entrada no arquivo de log com nivel e mensagem' {
+            $logPath = Join-Path ([System.IO.Path]::GetTempPath()) ('wba-log-' + [guid]::NewGuid().ToString() + '.log')
+            try {
+                Write-ScriptLog -Message 'mensagem de teste' -Level INFO -LogPath $logPath
+                Test-Path -LiteralPath $logPath | Should -BeTrue
+                $content = Get-Content -LiteralPath $logPath -Raw
+                $content | Should -Match '\[INFO\]'
+                $content | Should -Match 'mensagem de teste'
+            }
+            finally {
+                if (Test-Path -LiteralPath $logPath) { Remove-Item -LiteralPath $logPath -Force }
+            }
+        }
+
+        It 'Write-ScriptLog deve incluir timestamp no formato yyyy-MM-dd HH:mm:ss' {
+            $logPath = Join-Path ([System.IO.Path]::GetTempPath()) ('wba-log-' + [guid]::NewGuid().ToString() + '.log')
+            try {
+                Write-ScriptLog -Message 'timestamp' -LogPath $logPath
+                $content = Get-Content -LiteralPath $logPath -Raw
+                $content | Should -Match '\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}'
+            }
+            finally {
+                if (Test-Path -LiteralPath $logPath) { Remove-Item -LiteralPath $logPath -Force }
+            }
+        }
+
+        It 'Write-ScriptLog nao deve lancar excecao quando LogPath e omitido' {
+            { Write-ScriptLog -Message 'sem arquivo' -Level INFO } | Should -Not -Throw
+        }
+    }
+
+    Context 'Sessao de script' {
+        It 'Initialize-ScriptSession deve retornar objeto com as propriedades esperadas' {
+            $reportsRoot = Join-Path ([System.IO.Path]::GetTempPath()) ('wba-reports-' + [guid]::NewGuid().ToString())
+            try {
+                $session = Initialize-ScriptSession -ModuleName 'Teste' -BasePath $reportsRoot -ExecutionMode 'Diagnostico'
+                $props = $session.PSObject.Properties.Name
+                $props | Should -Contain 'StartedAt'
+                $props | Should -Contain 'Mode'
+                $props | Should -Contain 'ReportsRoot'
+                $props | Should -Contain 'BasePath'
+                $props | Should -Contain 'Path'
+                $props | Should -Contain 'LogsPath'
+                $props | Should -Contain 'BackupsPath'
+                $session.Mode | Should -Be 'Diagnostico'
+            }
+            finally {
+                if (Test-Path -LiteralPath $reportsRoot) { Remove-Item -LiteralPath $reportsRoot -Recurse -Force }
+            }
+        }
+
+        It 'Initialize-ScriptSession deve ter StartedAt como DateTime' {
+            $reportsRoot = Join-Path ([System.IO.Path]::GetTempPath()) ('wba-reports-' + [guid]::NewGuid().ToString())
+            try {
+                $session = Initialize-ScriptSession -ModuleName 'Teste' -BasePath $reportsRoot
+                $session.StartedAt | Should -BeOfType [datetime]
+            }
+            finally {
+                if (Test-Path -LiteralPath $reportsRoot) { Remove-Item -LiteralPath $reportsRoot -Recurse -Force }
+            }
+        }
+    }
+
+    Context 'Consulta CIM segura' {
+        It 'Get-CimInstanceSafe deve retornar array vazio para classe invalida' {
+            $result = @(Get-CimInstanceSafe -ClassName 'WBA_ClasseInexistente_99999')
+            $result.Count | Should -Be 0
+        }
+
+        It 'Get-CimInstanceSafe deve retornar array para classe valida' {
+            $result = @(Get-CimInstanceSafe -ClassName 'Win32_OperatingSystem')
+            if ($result.Count -eq 0) {
+                Set-ItResult -Skipped -Because 'CIM nao disponivel neste ambiente de teste'
+                return
+            }
+            $result.Count | Should -BeGreaterThan 0
+        }
+    }
+
+    Context 'Configuracao do toolkit' {
+        It 'Get-ToolkitConfiguration deve retornar PSCustomObject com ConfigPath quando arquivo nao existe' {
+            $configPath = Join-Path ([System.IO.Path]::GetTempPath()) ('wba-cfg-' + [guid]::NewGuid().ToString() + '.json')
+            $result = Get-ToolkitConfiguration -ConfigPath $configPath
+            $result | Should -BeOfType [psobject]
+            $result.PSObject.Properties.Name | Should -Contain 'ConfigPath'
+            $result.ConfigPath | Should -Be $configPath
+        }
+
+        It 'Get-ToolkitConfiguration deve ler propriedades de arquivo JSON existente' {
+            $configPath = Join-Path ([System.IO.Path]::GetTempPath()) ('wba-cfg-' + [guid]::NewGuid().ToString() + '.json')
+            try {
+                '{"ReportsRoot": "C:\\WBA\\Relatorios"}' | Set-Content -LiteralPath $configPath -Encoding UTF8
+                $result = Get-ToolkitConfiguration -ConfigPath $configPath
+                $result.ReportsRoot | Should -Be 'C:\WBA\Relatorios'
+                $result.ConfigPath  | Should -Be $configPath
+            }
+            finally {
+                if (Test-Path -LiteralPath $configPath) { Remove-Item -LiteralPath $configPath -Force }
             }
         }
     }
