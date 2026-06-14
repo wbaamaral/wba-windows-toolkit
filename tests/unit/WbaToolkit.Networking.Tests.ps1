@@ -33,6 +33,46 @@ Describe 'WbaToolkit.Networking' {
         It 'Deve exportar Invoke-TargetConnectivityWizard' {
             (Get-Command Invoke-TargetConnectivityWizard -ErrorAction Stop).CommandType | Should -Be 'Function'
         }
+
+        It 'Deve exportar Test-TcpPortConnectivity' {
+            (Get-Command Test-TcpPortConnectivity -ErrorAction Stop).CommandType | Should -Be 'Function'
+        }
+
+        It 'Deve exportar Test-UdpPortConnectivity' {
+            (Get-Command Test-UdpPortConnectivity -ErrorAction Stop).CommandType | Should -Be 'Function'
+        }
+
+        It 'Deve exportar Test-LocalTcpListener' {
+            (Get-Command Test-LocalTcpListener -ErrorAction Stop).CommandType | Should -Be 'Function'
+        }
+
+        It 'Deve exportar Test-LocalUdpListener' {
+            (Get-Command Test-LocalUdpListener -ErrorAction Stop).CommandType | Should -Be 'Function'
+        }
+
+        It 'Deve exportar New-ConnectivityTestPlan' {
+            (Get-Command New-ConnectivityTestPlan -ErrorAction Stop).CommandType | Should -Be 'Function'
+        }
+
+        It 'Deve exportar Export-ConnectivityReportPdf' {
+            (Get-Command Export-ConnectivityReportPdf -ErrorAction Stop).CommandType | Should -Be 'Function'
+        }
+
+        It 'Deve exportar Test-GatewayConnectivity' {
+            (Get-Command Test-GatewayConnectivity -ErrorAction Stop).CommandType | Should -Be 'Function'
+        }
+
+        It 'Deve exportar Test-DnsResolution' {
+            (Get-Command Test-DnsResolution -ErrorAction Stop).CommandType | Should -Be 'Function'
+        }
+
+        It 'Deve exportar Test-IcmpConnectivity' {
+            (Get-Command Test-IcmpConnectivity -ErrorAction Stop).CommandType | Should -Be 'Function'
+        }
+
+        It 'Deve exportar Invoke-ConnectivityWizard' {
+            (Get-Command Invoke-ConnectivityWizard -ErrorAction Stop).CommandType | Should -Be 'Function'
+        }
     }
 
     Context 'Contrato dos testes' {
@@ -119,6 +159,28 @@ Describe 'WbaToolkit.Networking' {
             $result = Export-ConnectivityReportPdf -HtmlPath $fakePath
             $result | Should -BeOfType [psobject]
             $result.Type | Should -Be 'PDF'
+        }
+    }
+
+    Context 'Invoke-ConnectivityTest' {
+        It 'Deve retornar objeto de relatorio com as propriedades esperadas' {
+            $report = Invoke-ConnectivityTest -IpTargets @('127.0.0.1') -DnsTargets @('localhost') `
+                -DomainTargets @('localhost') -TcpPort 80
+            $report | Should -BeOfType [psobject]
+            $report.PSObject.Properties.Name | Should -Contain 'ReportId'
+            $report.PSObject.Properties.Name | Should -Contain 'Results'
+            $report.PSObject.Properties.Name | Should -Contain 'Summary'
+            $report.PSObject.Properties.Name | Should -Contain 'Context'
+            $report.PSObject.Properties.Name | Should -Contain 'FinishedAt'
+        }
+
+        It 'Summary deve conter contadores de resultado' {
+            $report = Invoke-ConnectivityTest -IpTargets @('127.0.0.1') -DnsTargets @('localhost') `
+                -DomainTargets @('localhost') -TcpPort 80
+            $summary = $report.Summary
+            $summary.PSObject.Properties.Name | Should -Contain 'Total'
+            $summary.PSObject.Properties.Name | Should -Contain 'Success'
+            $summary.PSObject.Properties.Name | Should -Contain 'Failed'
         }
     }
 
