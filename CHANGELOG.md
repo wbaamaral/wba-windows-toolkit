@@ -2,7 +2,10 @@
 
 ## [Não lançado]
 
+## [v1.0.1] — 2026-06-14
 
+### Adicionado
+- Estrutura `docs/manual/` com catálogo geral de scripts por função operacional, guia rápido do operador e referência de módulos e funções públicas
 
 ## [v1.0.0] — 2026-06-14
 
