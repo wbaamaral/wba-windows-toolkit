@@ -1,6 +1,6 @@
-# WBA Windows Toolkit — v1.1.1
+# WBA Windows Toolkit — v1.1.3
 
-> Versão de documentação · PowerShell 5.1 · Windows 10 / Server 2016+
+> **v1.1.3** · PowerShell 5.1 · Windows 10 / Server 2016+
 
 ---
 
@@ -8,10 +8,10 @@
 
 | Módulo | Versão | Funções | Descrição |
 |---|---|---|---|
-| `WbaToolkit.Core` | 1.1.1 | 24 | Funções base: saída padronizada, logging, sessão, relatórios, utilitários e documentação HTML |
-| `WbaToolkit.Networking` | 1.1.1 | 16 | Diagnóstico de conectividade TCP/UDP/ICMP/DNS, wizard e exportação de relatórios |
-| `WbaToolkit.Startup` | 1.1.1 | 7 | Gerenciamento de itens de inicialização do Windows |
-| `WbaToolkit.Maintenance` | 1.1.1 | 5 | Preparação de imagem corporativa para sysprep |
+| `WbaToolkit.Core` | 1.1.3 | 24 | Funções base: saída padronizada, logging, sessão, relatórios, utilitários e documentação HTML |
+| `WbaToolkit.Networking` | 1.1.3 | 16 | Diagnóstico de conectividade TCP/UDP/ICMP/DNS, wizard e exportação de relatórios |
+| `WbaToolkit.Startup` | 1.1.3 | 7 | Gerenciamento de itens de inicialização do Windows |
+| `WbaToolkit.Maintenance` | 1.1.3 | 5 | Preparação de imagem corporativa para sysprep |
 | **Total** | | **52** | |
 
 ---
@@ -55,16 +55,16 @@
 
 ## 📋 O que mudou nesta versão
 
-### v1.1.1 — Correções de documentação
-- `docs/manual/README.md`: `Export-ToolkitDocumentation` adicionado na referência técnica; contagem de funções do Core corrigida (23→24); exemplos de geração atualizados
-- `docs/manual/referencia/modulos.md`: `Export-ToolkitDocumentation` adicionado na tabela de utilitários
-- `docs/manual/operador/guia-rapido.md`: seção de geração do portal HTML adicionada
+### v1.1.3 — RELEASE-NOTES.md atualizado para a versão corrente
+- `RELEASE-NOTES.md` reflete a v1.1.3 e aplica a janela deslizante definida no processo de release
 
-### v1.1.0 — Portal HTML offline (`Export-ToolkitDocumentation`)
-- Nova função pública `Export-ToolkitDocumentation` — portal HTML completo offline
-- Modo `-Mode All|Portal|TechnicalReference`
-- `ConvertFrom-MarkdownSimple` (PS 5.1 puro) e `New-PortalIndexHtml` adicionados como funções privadas
-- 5 testes Pester adicionados
+### v1.1.2 — Processo de release e artefatos formalizados
+- `RELEASE-NOTES.md`: documento de apresentação da release publicado como corpo no Codeberg
+- `tools/publish-codeberg-release.sh`: publica release via API do Codeberg (curl + Python)
+- `spec-win-toolkit`: `processo-release.md` reescrito; ADR 0018 atualizado; `template-release-notes.md` criado
+
+### v1.1.1 — Correções de documentação
+- `docs/manual/` atualizado para refletir `Export-ToolkitDocumentation`: contagem de funções corrigida (23→24), exemplos atualizados, seção de portal HTML no guia rápido
 
 ---
 
