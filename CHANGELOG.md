@@ -4,6 +4,12 @@
 
 
 
+## [v1.1.2] — 2026-06-14
+
+### Adicionado
+- `RELEASE-NOTES.md`: documento de apresentação da release (módulos, scripts, início rápido) publicado como corpo da release no Codeberg
+- `tools/publish-codeberg-release.sh`: script bash para publicar release no Codeberg via API com `RELEASE-NOTES.md` como corpo
+
 ## [v1.1.1] — 2026-06-14
 
 ### Alterado
