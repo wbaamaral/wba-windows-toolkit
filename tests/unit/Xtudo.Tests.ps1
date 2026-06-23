@@ -20,7 +20,7 @@ Describe 'Xtudo launcher' {
         $script:launcherContent | Should -Match 'function\s+Invoke-XtudoScript'
     }
 
-    It 'Mantem cinco atalhos rapidos e uma rota pesquisavel de update' {
+    It 'Mantem cinco atalhos rapidos, busca e rota pesquisavel de update' {
         $script:launcherContent | Should -Match "Path\s+=\s+'scripts/limpar-windows\.ps1'"
         $script:launcherContent | Should -Match "Path\s+=\s+'scripts/diagnosticar-disco-100\.ps1'"
         $script:launcherContent | Should -Match "Path\s+=\s+'scripts/diagnosticar-memoria\.ps1'"
@@ -28,10 +28,9 @@ Describe 'Xtudo launcher' {
         $script:launcherContent | Should -Match "Path\s+=\s+'scripts/preparar-imagem-windows\.ps1'"
         $script:launcherContent | Should -Match "Path\s+=\s+'scripts/atualizar-windows\.ps1'"
         ($script:launcherContent -match 'Quick\s+=\s+\$true') | Should -BeTrue
-    }
-
-    It 'Preserva os atalhos de cancelamento para o operador' {
         $script:launcherContent | Should -Match '0/q/sair cancela'
-        ($script:launcherContent.Contains("`$input -match '^(0|q|quit|sair)$'")) | Should -BeTrue
+        $script:launcherContent | Should -Match "\$input -match '\^\(0\|q\|quit\|sair\)\$'"
+        $script:launcherContent | Should -Match 'Resultados encontrados:'
+        $script:launcherContent | Should -Match 'Nenhum resultado exato\.'
     }
 }
